@@ -32,11 +32,11 @@ class CandidateCard(QFrame):
         # Action buttons
         button_layout = QHBoxLayout()
         summary_button = QPushButton("Summary")
-        summary_button.setStyleSheet("background-color: #77B1D4; color: black; border-radius: 3px;")
+        summary_button.setStyleSheet("background-color: #2196F3; color: white; border-radius: 3px;")
         summary_button.setIcon(QIcon("assets/summary_icon.png"))  # Placeholder path for icon
-        summary_button.clicked.connect(lambda: self.on_summary_click(self.candidate["name"]))
+        summary_button.clicked.connect(lambda: self.on_summary_click(self.candidate))
         view_button = QPushButton("View CV")
-        view_button.setStyleSheet("background-color: #77B1D4; color: black; border-radius: 3px;")
+        view_button.setStyleSheet("background-color: #FF9800; color: white; border-radius: 3px;")
         view_button.setIcon(QIcon("assets/view_icon.png"))  # Placeholder path for icon
         view_button.clicked.connect(lambda: self.on_view_click(self.candidate["cv_path"]))
         button_layout.addWidget(summary_button)

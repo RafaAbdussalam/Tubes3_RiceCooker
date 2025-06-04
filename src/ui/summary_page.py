@@ -1,6 +1,8 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+from core.pdf_parser import extract_text_from_pdf
+from core.regex_extractor import extract_candidate_info
 
 class SummaryWindow(QWidget):
     """Widget for displaying the CV summary page."""
@@ -25,66 +27,74 @@ class SummaryWindow(QWidget):
 
         # Back button
         back_button = QPushButton("Back to Search")
-        back_button.setStyleSheet("background-color: #FA5053; color: white; padding: 5px; border-radius: 5px;")
+        back_button.setStyleSheet("background-color: #757575; color: white; padding: 5px; border-radius: 5px;")
         back_button.clicked.connect(self.controller.switch_to_search)
         layout.addWidget(back_button)
 
-    def update_candidate_info(self, candidate_name):
-        """Update the candidate information on the summary page."""
+    def update_candidate_info(self, candidate_name, cv_path=None, matched_keywords=None):
+        """Update the candidate information on the summary page using extracted data."""
         # Clear previous information
         while self.info_layout.count():
             child = self.info_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        # Simulate candidate data
-        candidate_data = {
-            "name": candidate_name,
-            "birthdate": "05-19-2025",
-            "address": "Masjid Salman ITB",
-            "phone": "0812 3456 7890",
-            "skills": ["React", "Express", "HTML"],
-            "job_history": {"CTO": "2003-2004"},
-            "education": {"university": "Institut Teknologi Bandung", "years": "2002-2004"}
-        }
+        # Extract text from CV if path is provided
+        cv_text = extract_text_from_pdf(cv_path) if cv_path else ""
+        candidate_data = extract_candidate_info(cv_text) if cv_text else {}
+
+        # Default values if extraction fails
+        candidate_data.setdefault("name", candidate_name)
+        candidate_data.setdefault("phone", "N/A")
+        candidate_data.setdefault("email", "N/A")
+        candidate_data.setdefault("skills", [])
+        candidate_data.setdefault("job_history", [])
+        candidate_data.setdefault("education", [])
 
         # Display candidate information
         name_label = QLabel(candidate_data["name"])
         name_label.setFont(QFont("Segoe UI", 12, QFont.Bold))
         self.info_layout.addWidget(name_label)
 
-        birthdate_label = QLabel(f"Birthdate: {candidate_data['birthdate']}")
-        self.info_layout.addWidget(birthdate_label)
-
-        address_label = QLabel(f"Address: {candidate_data['address']}")
-        self.info_layout.addWidget(address_label)
-
         phone_label = QLabel(f"Phone: {candidate_data['phone']}")
         self.info_layout.addWidget(phone_label)
 
-        # Skills
-        skills_label = QLabel("Skills:")
-        skills_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self.info_layout.addWidget(skills_label)
+        email_label = QLabel(f"Email: {candidate_data['email']}")
+        self.info_layout.addWidget(email_label)
 
-        skills_layout = QHBoxLayout()
-        for skill in candidate_data["skills"]:
-            skill_button = QPushButton(skill)
-            skill_button.setStyleSheet("background-color: #BBDEFB; color: black; border-radius: 5px; padding: 5px;")
-            skills_layout.addWidget(skill_button)
-        self.info_layout.addLayout(skills_layout)
+        # Skills (combine matched keywords with extracted skills)
+        all_skills = list(set(candidate_data["skills"] + list(matched_keywords.keys() if matched_keywords else [])))
+        if all_skills:
+            skills_label = QLabel("Skills:")
+            skills_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            self.info_layout.addWidget(skills_label)
+
+            skills_layout = QHBoxLayout()
+            for skill in all_skills:
+                skill_button = QPushButton(skill)
+                skill_button.setStyleSheet("background-color: #BBDEFB; color: black; border-radius: 5px; padding: 5px;")
+                skills_layout.addWidget(skill_button)
+            self.info_layout.addLayout(skills_layout)
 
         # Job History
         job_history_label = QLabel("Job History:")
         job_history_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
         self.info_layout.addWidget(job_history_label)
 
-        for position, years in candidate_data["job_history"].items():
+        if candidate_data["job_history"]:
+            for job in candidate_data["job_history"]:
+                job_entry = QFrame()
+                job_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
+                job_layout = QVBoxLayout(job_entry)
+                job_layout.addWidget(QLabel(job["position"]))
+                job_layout.addWidget(QLabel(f"Company: {job['company']}"))
+                job_layout.addWidget(QLabel(f"Years: {job['years']}"))
+                self.info_layout.addWidget(job_entry)
+        else:
             job_entry = QFrame()
             job_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
             job_layout = QVBoxLayout(job_entry)
-            job_layout.addWidget(QLabel(position))
-            job_layout.addWidget(QLabel(years))
+            job_layout.addWidget(QLabel("No job history found"))
             self.info_layout.addWidget(job_entry)
 
         # Education
@@ -92,12 +102,20 @@ class SummaryWindow(QWidget):
         education_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
         self.info_layout.addWidget(education_label)
 
-        for university, years in candidate_data["education"].items():
+        if candidate_data["education"]:
+            for edu in candidate_data["education"]:
+                edu_entry = QFrame()
+                edu_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
+                edu_layout = QVBoxLayout(edu_entry)
+                edu_layout.addWidget(QLabel(edu["degree"]))
+                edu_layout.addWidget(QLabel(f"University: {edu['university']}"))
+                edu_layout.addWidget(QLabel(f"Years: {edu['years']}"))
+                self.info_layout.addWidget(edu_entry)
+        else:
             edu_entry = QFrame()
             edu_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
             edu_layout = QVBoxLayout(edu_entry)
-            edu_layout.addWidget(QLabel(university))
-            edu_layout.addWidget(QLabel(years))
+            edu_layout.addWidget(QLabel("No education history found"))
             self.info_layout.addWidget(edu_entry)
 
         self.info_layout.addStretch()
