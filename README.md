@@ -1,10 +1,6 @@
 # Tubes3_RiceCooker
-# IF2-Strategi Algoritma-tubes-3
-
 **Tugas Besar - Strategi Algotima**  
 **Institut Teknologi Bandung, Informatika, K-3, Kelompok RiceCooker**  
-
----
 
 ## **Tentang Proyek Ini**  
 ### 🔥 **Apa Itu CV Analayzer?** 
