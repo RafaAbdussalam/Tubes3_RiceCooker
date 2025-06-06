@@ -8,7 +8,7 @@
 
 ## **Tentang Proyek Ini**  
 ### 🔥 **Apa Itu CV Analayzer?** 
-CV Analayzer adalah program berbasis GUI yang dirancang untuk menganalisis Curriculum Vitae (CV) secara otomatis menggunakan algoritma pencarian teks seperti Knuth-Morris-Pratt (KMP) dan Boyer-Moore (BM), serta fuzzy matching dengan Levenshtein Distance. Proyek ini dikembangkan sebagai bagian dari tugas besar mata kuliah Sistem Cerdas di Institut Teknologi Bandung (ITB). Aplikasi ini memungkinkan pengguna untuk mencari kandidat berdasarkan kata kunci, menampilkan ringkasan CV, dan mendukung navigasi antar halaman.
+CV Analayzer adalah program berbasis GUI yang dirancang untuk menganalisis Curriculum Vitae (CV) secara otomatis menggunakan algoritma pencarian teks seperti Knuth-Morris-Pratt (KMP) dan Boyer-Moore (BM), serta fuzzy matching dengan Levenshtein Distance. Proyek ini dikembangkan sebagai bagian dari tugas besar mata kuliah Strategi Algoritma. Aplikasi ini memungkinkan pengguna untuk mencari kandidat berdasarkan kata kunci, menampilkan ringkasan CV, dan mendukung navigasi antar halaman.
 
 ---
 
