@@ -1,57 +1,81 @@
 import re
 
-def extract_section(text: str, start_keyword: str, end_keywords: list[str]) -> str:
-    """Fungsi helper untuk mengekstrak teks di antara keyword."""
-    # MODIFIKASI: Menggunakan non-capturing group (?:...) untuk start_keyword.
-    # Ini memastikan bahwa (.*?) selalu menjadi group(1), tidak peduli bentuk start_keyword.
-    pattern_str = fr'(?:{start_keyword})(.*?)(?={"|".join(end_keywords)}|$)'
-    match = re.search(pattern_str, text, re.IGNORECASE | re.DOTALL)
-    if match:
-        # Sekarang match.group(1) akan selalu berisi konten yang kita inginkan.
-        return match.group(1).strip()
-    return ""
+# Daftar semua kemungkinan sinonim untuk setiap seksi
+# Didefinisikan di satu tempat agar mudah dikelola
+SECTION_KEYWORDS = {
+    'skills': r'Skills',
+    'summary': r'Summary|Objective|Profile',
+    'experience': r'Experience|Work History|Employment History',
+    'education': r'Education',
+    'highlights': r'Highlights',
+    'accomplishments': r'Accomplishments'
+}
+
+def extract_all_sections(text: str) -> dict:
+    """
+    Mengekstrak semua seksi dari teks CV menggunakan pendekatan terprogram.
+    1. Cari semua judul seksi dan lokasinya.
+    2. Urutkan berdasarkan lokasi.
+    3. Ekstrak konten di antara setiap pasangan judul.
+    """
+    all_keywords = []
+    for section_name, keywords in SECTION_KEYWORDS.items():
+        all_keywords.append(keywords)
+    
+    # Gabungkan semua keyword menjadi satu pola regex untuk menemukan semua judul sekaligus
+    combined_pattern = fr'^\s*({ "|".join(all_keywords) })'
+    
+    # Temukan semua judul dan posisinya
+    found_sections = []
+    for match in re.finditer(combined_pattern, text, re.MULTILINE | re.IGNORECASE):
+        # Cari nama seksi yang cocok dari SECTION_KEYWORDS
+        found_title = match.group(1).lower()
+        section_name = ''
+        for name, keywords in SECTION_KEYWORDS.items():
+            if re.search(fr'\b({keywords})\b', found_title, re.IGNORECASE):
+                section_name = name
+                break
+        
+        if section_name:
+            found_sections.append({
+                'name': section_name,
+                'start_index': match.start(),
+                'end_index': match.end()
+            })
+
+    # Jika tidak ada seksi yang ditemukan, kembalikan dictionary kosong
+    if not found_sections:
+        return {}
+
+    # Urutkan seksi berdasarkan indeks awal
+    found_sections.sort(key=lambda x: x['start_index'])
+    
+    # Ekstrak konten untuk setiap seksi
+    extracted_content = {}
+    for i, section in enumerate(found_sections):
+        content_start = section['end_index']
+        
+        # Tentukan akhir konten: awal seksi berikutnya atau akhir file
+        content_end = len(text)
+        if i + 1 < len(found_sections):
+            content_end = found_sections[i+1]['start_index']
+            
+        content = text[content_start:content_end].strip()
+        extracted_content[section['name']] = content
+
+    return extracted_content
+
+# Fungsi-fungsi di bawah ini sekarang menjadi lebih sederhana.
+# Mereka hanya perlu mengambil data dari hasil extract_all_sections.
 
 def extract_skills(text: str) -> str:
-    """Mengekstrak bagian Skills dari teks CV."""
-    end_keywords = ['Experience', 'Work History', 'Education', 'Projects', 'Accomplishments']
-    return extract_section(text, 'Skills', end_keywords)
+    sections = extract_all_sections(text)
+    return sections.get('skills', '')
 
 def extract_experience(text: str) -> str:
-    """Mengekstrak bagian Experience/Work History dari teks CV."""
-    # MODIFIKASI: Hapus tanda kurung, biarkan helper yang menanganinya.
-    start_keywords = r'Experience|Work History|Employment History'
-    end_keywords = ['Education', 'Projects', 'Skills', 'Certifications', 'Accomplishments']
-    return extract_section(text, start_keywords, end_keywords)
-    
+    sections = extract_all_sections(text)
+    return sections.get('experience', '')
+
 def extract_education(text: str) -> str:
-    """Mengekstrak bagian Education dari teks CV."""
-    end_keywords = ['Skills', 'Experience', 'Work History', 'Projects', 'Certifications']
-    return extract_section(text, 'Education', end_keywords)
-
-# --- Untuk pengujian mandiri ---
-if __name__ == '__main__':
-    sample_text = """
-    John Doe
-    
-    SKILLS
-    Python, Java, SQL, Git, Docker.
-    Problem Solving.
-    
-    WORK HISTORY
-    Software Engineer at Tech Corp (2020 - Present)
-    - Developed cool stuff.
-    
-    EDUCATION
-    Bachelor of Science in Computer Science, University of Life (2016 - 2020)
-    """
-    skills = extract_skills(sample_text)
-    print("--- SKILLS ---")
-    print(skills)
-
-    experience = extract_experience(sample_text)
-    print("\n--- EXPERIENCE ---")
-    print(experience)
-
-    education = extract_education(sample_text)
-    print("\n--- EDUCATION ---")
-    print(education)
+    sections = extract_all_sections(text)
+    return sections.get('education', '')
