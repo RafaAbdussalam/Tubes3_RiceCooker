@@ -16,18 +16,21 @@ class CandidateCard(QFrame):
         layout = QVBoxLayout(self)
 
         # Candidate name
-        name_label = QLabel(self.candidate["name"])
+        name_label = QLabel(self.candidate.get("name", "N/A"))
         name_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
         layout.addWidget(name_label)
 
         # Matched keywords
-        matches_label = QLabel(f"Matched keywords: {self.candidate['matches']}")
+        matches = self.candidate.get("matches", 0)
+        matches_label = QLabel(f"Matched keywords: {matches}")
         layout.addWidget(matches_label)
 
         # Keywords with occurrences
-        keywords_text = ", ".join([f"{k}: {v} occurrence" for k, v in self.candidate["keywords"].items()])
-        keywords_label = QLabel(keywords_text)
-        layout.addWidget(keywords_label)
+        keywords = self.candidate.get("keywords", {})
+        if keywords:
+            keywords_text = ", ".join([f"{k}: {v} occurrence" for k, v in keywords.items()])
+            keywords_label = QLabel(keywords_text)
+            layout.addWidget(keywords_label)
 
         # Action buttons
         button_layout = QHBoxLayout()
@@ -38,7 +41,7 @@ class CandidateCard(QFrame):
         view_button = QPushButton("View CV")
         view_button.setStyleSheet("background-color: #FF9800; color: white; border-radius: 3px;")
         view_button.setIcon(QIcon("assets/view_icon.png"))  # Placeholder path for icon
-        view_button.clicked.connect(lambda: self.on_view_click(self.candidate["cv_path"]))
+        view_button.clicked.connect(lambda: self.on_view_click(self.candidate.get("cv_path", "")))
         button_layout.addWidget(summary_button)
         button_layout.addWidget(view_button)
         layout.addLayout(button_layout)

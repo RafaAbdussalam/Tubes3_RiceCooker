@@ -1,5 +1,26 @@
 import fitz  # PyMuPDF
 import re
+import os
+import logging
+
+# Konfigurasi logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def get_absolute_path(relative_path: str) -> str:
+    """
+    Mengkonversi path relatif menjadi path absolut.
+    """
+    try:
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        absolute_path = os.path.join(root_dir, relative_path)
+        if not os.path.exists(absolute_path):
+            logger.error(f"File tidak ditemukan: {absolute_path}")
+            return ""
+        return absolute_path
+    except Exception as e:
+        logger.error(f"Error dalam get_absolute_path: {str(e)}")
+        return ""
 
 def extract_text_for_regex(pdf_path: str) -> str:
     """
@@ -13,7 +34,11 @@ def extract_text_for_regex(pdf_path: str) -> str:
         String teks dengan format asli.
     """
     try:
-        doc = fitz.open(pdf_path)
+        absolute_path = get_absolute_path(pdf_path)
+        if not absolute_path:
+            return ""
+            
+        doc = fitz.open(absolute_path)
         full_text = ""
         for page in doc:
             # Menggunakan get_text("text") adalah default dan mempertahankan format
@@ -21,7 +46,7 @@ def extract_text_for_regex(pdf_path: str) -> str:
         doc.close()
         return full_text
     except Exception as e:
-        print(f"Error reading PDF for Regex {pdf_path}: {e}")
+        logger.error(f"Error reading PDF for Regex {pdf_path}: {str(e)}")
         return ""
 
 def extract_text_for_pattern_matching(pdf_path: str) -> str:
@@ -35,18 +60,23 @@ def extract_text_for_pattern_matching(pdf_path: str) -> str:
     Returns:
         String teks dalam format lowercase dan spasi tunggal.
     """
-    # Kita bisa menggunakan fungsi pertama sebagai dasar
-    raw_text = extract_text_for_regex(pdf_path)
-    if not raw_text:
+    try:
+        # Kita bisa menggunakan fungsi pertama sebagai dasar
+        raw_text = extract_text_for_regex(pdf_path)
+        if not raw_text:
+            logger.warning(f"Tidak ada teks yang diekstrak dari {pdf_path}")
+            return ""
+        
+        # 1. Ubah ke huruf kecil (lowercase)
+        text = raw_text.lower()
+        
+        # 2. Ganti semua karakter whitespace (spasi, tab, newline) dengan satu spasi
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+    except Exception as e:
+        logger.error(f"Error dalam extract_text_for_pattern_matching untuk {pdf_path}: {str(e)}")
         return ""
-    
-    # 1. Ubah ke huruf kecil (lowercase)
-    text = raw_text.lower()
-    
-    # 2. Ganti semua karakter whitespace (spasi, tab, newline) dengan satu spasi
-    text = re.sub(r'\s+', ' ', text)
-    
-    return text.strip()
 
 # --- Untuk pengujian mandiri ---
 # Kode ini akan meniru proses pembuatan file .txt seperti pada contoh spesifikasi

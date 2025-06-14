@@ -1,11 +1,20 @@
 import sys
 from PyQt5.QtWidgets import QApplication
 from ui.main_page import CVAnalyzerApp
-from db.operations import close_db_connection 
 
-if __name__ == "__main__":
+def main():
+    """Fungsi utama untuk menjalankan aplikasi."""
+    # Inisialisasi QApplication
     app = QApplication(sys.argv)
+    
+    # Buat instance window utama
     window = CVAnalyzerApp()
+    
+    # Tampilkan window
     window.show()
-    app.aboutToQuit.connect(close_db_connection)
+    
+    # Jalankan event loop aplikasi
     sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    main()

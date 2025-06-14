@@ -1,6 +1,7 @@
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QRadioButton, QPushButton, QScrollArea, QStackedWidget, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QRadioButton, QPushButton, QScrollArea, QStackedWidget, QMessageBox, QSpinBox
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QDesktopServices
 from ui.summary_page import SummaryWindow
 from core.pdf_parser import extract_text_for_pattern_matching, extract_text_for_regex
 from ui.widgets import CandidateCard
@@ -9,8 +10,8 @@ from core.kmp import kmp_search
 from core.bm import bm_search
 from core.levenshtein import levenshtein_distance
 from core.regex_extractor import extract_all_sections
-from db.operations import fetch_candidates, save_candidate_profile
-import time
+from db.operations import search_cvs, get_applicant_summary, close_db_connection
+import time, os
 
 class CVAnalyzerApp(QMainWindow):
     """Main window for the CV Analyzer application."""
@@ -61,10 +62,12 @@ class CVAnalyzerApp(QMainWindow):
         algo_label = QLabel("Search Algorithm: ")
         self.kmp_radio = QRadioButton("KMP")
         self.bm_radio = QRadioButton("BM")
+        self.ac_radio = QRadioButton("Aho-Corasick")
         self.kmp_radio.setChecked(True)
         algo_layout.addWidget(algo_label)
         algo_layout.addWidget(self.kmp_radio)
         algo_layout.addWidget(self.bm_radio)
+        algo_layout.addWidget(self.ac_radio)
         layout.addLayout(algo_layout)
 
         # Top Matches input
@@ -109,123 +112,83 @@ class CVAnalyzerApp(QMainWindow):
         self.scroll_area.setWidget(self.results_container)
         layout.addWidget(self.scroll_area)
 
+    # Di dalam kelas CVAnalyzerApp di main_page.py
     def perform_search(self):
-        """Perform search using core algorithms and display results."""
-        # Get and validate top matches input
-        try:
-            top_matches = int(self.top_matches_input.text())
-            if top_matches <= 0:
-                top_matches = 1  # Minimum 1 match
-            elif top_matches > 50:  # Arbitrary max limit
-                top_matches = 50
-        except ValueError:
-            top_matches = 3  # Default to 3 if invalid
-            QMessageBox.warning(self, "Invalid Input", "Please enter a valid number for Top Matches.")
-
-        # Get keywords from input
-        keywords = [kw.strip() for kw in self.keywords_input.text().split(",")]
-        if not keywords or all(not kw for kw in keywords):
-            QMessageBox.warning(self, "No Keywords", "Please enter at least one keyword.")
+        # 1. Kumpulkan input dari UI
+        keywords_text = self.keywords_input.text()
+        if not keywords_text.strip():
+            QMessageBox.warning(self, "Input Kosong", "Silakan masukkan kata kunci.")
             return
+        
+        keywords = [kw.strip() for kw in keywords_text.split(',')]
+        algorithm = 'KMP' if self.kmp_radio.isChecked() else 'BM' if self.bm_radio.isChecked() else 'AHO-CORASICK' if self.ac_radio.isChecked() else 'KMP'
+        top_n = int(self.top_matches_input.text())
 
-        # Determine selected algorithm
-        algorithm = "kmp" if self.kmp_radio.isChecked() else "bm"
+        # 2. Panggil fungsi backend tunggal
+        # Seluruh logika kompleks (PDF, KMP/BM, Levenshtein, DB) ada di dalam search_cvs
+        search_result = search_cvs(keywords, algorithm, top_n)
 
-        # Fetch candidates from database
-        candidates = fetch_candidates()  # Expected to return list of dicts with 'id', 'name', 'cv_path'
-        if not candidates:
-            self.result_summary.setText("No candidates found in database.")
-            return
+        # 3. Tampilkan hasil yang dikembalikan oleh backend
+        self.result_summary.setText(
+            f"Exact Match: scanned in {search_result['execution_time_exact']:.2f}s.\n"
+            f"Fuzzy Match: scanned in {search_result['execution_time_fuzzy']:.2f}s."
+        )
 
-        # Start timing
-        start_time = time.time()
-
-        # Process CVs and perform search
-        results = []
-        for candidate in candidates:
-            cv_text = extract_text_for_pattern_matching(candidate["cv_path"])
-            if not cv_text:
-                continue
-
-            # Exact matching
-            exact_matches = {}
-            for kw in keywords:
-                if algorithm == "kmp":
-                    occurrences = kmp_search(cv_text, kw)
-                else:  # bm
-                    occurrences = bm_search(cv_text, kw)
-                if occurrences:
-                    exact_matches[kw] = len(occurrences)
-
-            # Fuzzy matching if no exact matches
-            if not exact_matches:
-                fuzzy_matches = {}
-                for kw in keywords:
-                    distance = levenshtein_distance(cv_text, kw)
-                    if distance < 3:  # Threshold for similarity
-                        fuzzy_matches[kw] = 1
-                if fuzzy_matches:
-                    exact_matches = fuzzy_matches
-
-            if exact_matches:
-                total_matches = sum(exact_matches.values())
-                # Extract additional candidate info for summary
-                raw_cv_text = extract_text_for_regex(candidate["cv_path"])
-                sections = extract_all_sections(raw_cv_text) if raw_cv_text else {}
-                results.append({
-                    "name": candidate["name"],
-                    "matches": total_matches,
-                    "keywords": exact_matches,
-                    "cv_path": candidate["cv_path"],
-                    "sections": sections
-                })
-
-        # End timing
-        elapsed_time = (time.time() - start_time) * 1000  # Convert to milliseconds
-
-        # Sort by matches and limit to top_matches
-        results.sort(key=lambda x: x["matches"], reverse=True)
-        displayed_results = results[:top_matches]
-
-        # Update summary result section
-        self.result_summary.setText(f"Exact Match: {len(candidates)} CVs scanned in {elapsed_time:.0f}ms.\nFuzzy Match: {len(candidates)} CVs scanned in {(elapsed_time + 1):.0f}ms.")
-
-        # Clear previous results
+        # Hapus hasil pencarian sebelumnya
         while self.results_layout.count():
             child = self.results_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
-
-        # Display results
-        if not displayed_results:
-            self.results_layout.addWidget(QLabel("No matches found."))
+        
+        # Tampilkan kartu kandidat baru
+        if not search_result['data']:
+            self.results_layout.addWidget(QLabel("Tidak ada CV yang cocok ditemukan."))
         else:
-            for result in displayed_results:
-                card = CandidateCard(result, self.switch_to_summary, self.view_cv)
+            for candidate_data in search_result['data']:
+                # data `candidate_data` sudah dalam format yang benar dari backend
+                card = CandidateCard(candidate_data, self.switch_to_summary, self.view_cv)
                 self.results_layout.addWidget(card)
-
+        
         self.results_layout.addStretch()
-
-    def switch_to_summary(self, candidate):
-        """Switch to the summary page and update candidate data."""
-        self.summary_page.update_candidate_info(
-            candidate_name=candidate["name"],
-            cv_path=candidate["cv_path"],
-            matched_keywords=candidate["keywords"],
-            sections=candidate.get("sections", {})
-        )
-        self.stack.setCurrentWidget(self.summary_page)
+        
+    # Di dalam kelas CVAnalyzerApp di main_page.py
+    def switch_to_summary(self, candidate_data):
+        """Beralih ke halaman ringkasan setelah mengambil data dari backend."""
+        applicant_id = candidate_data['id']
+        
+        # Panggil backend untuk mendapatkan data ringkasan yang sudah diproses
+        summary_data = get_applicant_summary(applicant_id)
+        
+        if summary_data:
+            self.summary_page.update_candidate_info(summary_data)
+            self.stack.setCurrentWidget(self.summary_page)
+        else:
+            QMessageBox.critical(self, "Error", f"Tidak dapat menemukan detail untuk applicant ID: {applicant_id}")
 
     def switch_to_search(self):
         """Switch back to the search page."""
         self.stack.setCurrentWidget(self.search_page)
 
+    # Di dalam kelas CVAnalyzerApp di main_page.py
     def view_cv(self, cv_path):
-        """Open the CV file using the default system viewer."""
-        import os
+        """Membuka file CV menggunakan penampil default sistem."""
+        # Path dari DB sudah benar ('data/CATEGORY/file.pdf').
+        # Kita hanya perlu membuat path ini absolut dari root project.
         try:
-            os.startfile(cv_path)  # For Windows
-        except AttributeError:
-            os.system(f"open {cv_path}")  # For macOS
+            # Menggunakan os.path.abspath untuk mendapatkan path lengkap yang pasti benar
+            # Ini akan mengubah "../data/..." menjadi "C:\Tubes3_RiceCooker\data\..."
+            absolute_path = os.path.abspath(os.path.join("..", cv_path))
+            
+            if os.path.exists(absolute_path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(absolute_path))
+            else:
+                QMessageBox.warning(self, "File Tidak Ditemukan", f"File CV tidak dapat ditemukan di:\n{absolute_path}")
         except Exception as e:
-            print(f"Error opening CV: {e}")
+            QMessageBox.critical(self, "Error", f"Gagal membuka file CV: {e}")
+
+    # Di dalam kelas CVAnalyzerApp di main_page.py
+    def closeEvent(self, event):
+        """Menutup koneksi database saat aplikasi ditutup."""
+        print("Menutup aplikasi dan koneksi database...")
+        close_db_connection()
+        event.accept()

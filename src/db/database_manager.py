@@ -12,10 +12,10 @@ class DatabaseManager:
                 password=self.config['password']
             )
             cursor_init = conn_init.cursor()
-            cursor_init.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['db_name']}")
+            cursor_init.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
             cursor_init.close()
             conn_init.close()
-            print(f"Database '{self.config['db_name']}' is ready.")
+            print(f"Database '{self.config['database']}' is ready.")
 
             self.connection = mysql.connector.connect(**self.config)
             if self.connection.is_connected():
