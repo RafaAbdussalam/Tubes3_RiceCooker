@@ -1,8 +1,9 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
+import re  # Added import for regular expressions
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTextEdit
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
-from core.pdf_parser import extract_text_from_pdf
-from core.regex_extractor import extract_candidate_info
+from core.pdf_parser import extract_text_for_regex
+from core.regex_extractor import extract_all_sections
 
 class SummaryWindow(QWidget):
     """Widget for displaying the CV summary page."""
@@ -31,7 +32,7 @@ class SummaryWindow(QWidget):
         back_button.clicked.connect(self.controller.switch_to_search)
         layout.addWidget(back_button)
 
-    def update_candidate_info(self, candidate_name, cv_path=None, matched_keywords=None):
+    def update_candidate_info(self, candidate_name, cv_path=None, matched_keywords=None, sections=None):
         """Update the candidate information on the summary page using extracted data."""
         # Clear previous information
         while self.info_layout.count():
@@ -39,17 +40,23 @@ class SummaryWindow(QWidget):
             if child.widget():
                 child.widget().deleteLater()
 
-        # Extract text from CV if path is provided
-        cv_text = extract_text_from_pdf(cv_path) if cv_path else ""
-        candidate_data = extract_candidate_info(cv_text) if cv_text else {}
+        # Extract raw text from CV if path is provided
+        raw_cv_text = extract_text_for_regex(cv_path) if cv_path else ""
+        sections = sections or extract_all_sections(raw_cv_text) if raw_cv_text else {}
 
-        # Default values if extraction fails
-        candidate_data.setdefault("name", candidate_name)
-        candidate_data.setdefault("phone", "N/A")
-        candidate_data.setdefault("email", "N/A")
-        candidate_data.setdefault("skills", [])
-        candidate_data.setdefault("job_history", [])
-        candidate_data.setdefault("education", [])
+        # Extract basic candidate info
+        candidate_data = {
+            "name": candidate_name,
+            "phone": "N/A",
+            "email": "N/A",
+            "skills": sections.get("skills", "").split("\n") if sections.get("skills") else [],
+        }
+        if raw_cv_text:
+            # Simple regex to extract phone and email
+            phone_match = re.search(r'\b\d{9,}\b', raw_cv_text)
+            candidate_data["phone"] = phone_match.group(0) if phone_match else "N/A"
+            email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', raw_cv_text)
+            candidate_data["email"] = email_match.group(0) if email_match else "N/A"
 
         # Display candidate information
         name_label = QLabel(candidate_data["name"])
@@ -71,51 +78,46 @@ class SummaryWindow(QWidget):
 
             skills_layout = QHBoxLayout()
             for skill in all_skills:
-                skill_button = QPushButton(skill)
-                skill_button.setStyleSheet("background-color: #BBDEFB; color: black; border-radius: 5px; padding: 5px;")
-                skills_layout.addWidget(skill_button)
+                if skill.strip():  # Skip empty strings
+                    skill_button = QPushButton(skill.strip())
+                    skill_button.setStyleSheet("background-color: #BBDEFB; color: black; border-radius: 5px; padding: 5px;")
+                    skills_layout.addWidget(skill_button)
             self.info_layout.addLayout(skills_layout)
 
-        # Job History
-        job_history_label = QLabel("Job History:")
-        job_history_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self.info_layout.addWidget(job_history_label)
-
-        if candidate_data["job_history"]:
-            for job in candidate_data["job_history"]:
-                job_entry = QFrame()
-                job_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
-                job_layout = QVBoxLayout(job_entry)
-                job_layout.addWidget(QLabel(job["position"]))
-                job_layout.addWidget(QLabel(f"Company: {job['company']}"))
-                job_layout.addWidget(QLabel(f"Years: {job['years']}"))
-                self.info_layout.addWidget(job_entry)
+        # Experience
+        experience_text = sections.get("experience", "").strip()
+        if experience_text:
+            experience_label = QLabel("Experience:")
+            experience_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            self.info_layout.addWidget(experience_label)
+            experience_display = QTextEdit(experience_text)
+            experience_display.setReadOnly(True)
+            experience_display.setStyleSheet("border: 1px solid #ccc; border-radius: 5px; padding: 5px;")
+            experience_display.setFixedHeight(100)  # Adjust height as needed
+            self.info_layout.addWidget(experience_display)
         else:
-            job_entry = QFrame()
-            job_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
-            job_layout = QVBoxLayout(job_entry)
-            job_layout.addWidget(QLabel("No job history found"))
-            self.info_layout.addWidget(job_entry)
+            experience_frame = QFrame()
+            experience_frame.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
+            experience_layout = QVBoxLayout(experience_frame)
+            experience_layout.addWidget(QLabel("No experience found"))
+            self.info_layout.addWidget(experience_frame)
 
         # Education
-        education_label = QLabel("Education:")
-        education_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self.info_layout.addWidget(education_label)
-
-        if candidate_data["education"]:
-            for edu in candidate_data["education"]:
-                edu_entry = QFrame()
-                edu_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
-                edu_layout = QVBoxLayout(edu_entry)
-                edu_layout.addWidget(QLabel(edu["degree"]))
-                edu_layout.addWidget(QLabel(f"University: {edu['university']}"))
-                edu_layout.addWidget(QLabel(f"Years: {edu['years']}"))
-                self.info_layout.addWidget(edu_entry)
+        education_text = sections.get("education", "").strip()
+        if education_text:
+            education_label = QLabel("Education:")
+            education_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            self.info_layout.addWidget(education_label)
+            education_display = QTextEdit(education_text)
+            education_display.setReadOnly(True)
+            education_display.setStyleSheet("border: 1px solid #ccc; border-radius: 5px; padding: 5px;")
+            education_display.setFixedHeight(100)  # Adjust height as needed
+            self.info_layout.addWidget(education_display)
         else:
-            edu_entry = QFrame()
-            edu_entry.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
-            edu_layout = QVBoxLayout(edu_entry)
-            edu_layout.addWidget(QLabel("No education history found"))
-            self.info_layout.addWidget(edu_entry)
+            education_frame = QFrame()
+            education_frame.setStyleSheet("background-color: #E0E0E0; border-radius: 5px; padding: 5px;")
+            education_layout = QVBoxLayout(education_frame)
+            education_layout.addWidget(QLabel("No education found"))
+            self.info_layout.addWidget(education_frame)
 
         self.info_layout.addStretch()

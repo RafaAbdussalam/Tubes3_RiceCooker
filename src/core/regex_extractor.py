@@ -1,49 +1,81 @@
-def extract_candidate_info(text):
-    """Simulate extracting candidate information with dummy data."""
-    dummy_data = {
-        "Farhan": {
-            "name": "Farhan",
-            "phone": "081234567890",
-            "email": "farhan@example.com",
-            "skills": ["React", "HTML", "Python"],
-            "job_history": [{"position": "Software Engineer", "company": "Google", "years": "2018-2020"}],
-            "education": [{"degree": "B.S. in Computer Science", "university": "MIT", "years": "2014-2018"}]
-        },
-        "Aland": {
-            "name": "Aland",
-            "phone": "081298765432",
-            "email": "aland@example.com",
-            "skills": ["React", "Java"],
-            "job_history": [{"position": "Data Analyst", "company": "Amazon", "years": "2019-2021"}],
-            "education": [{"degree": "M.S. in Data Science", "university": "Stanford", "years": "2015-2019"}]
-        },
-        "Ariel": {
-            "name": "Ariel",
-            "phone": "081212345678",
-            "email": "ariel@example.com",
-            "skills": ["Express", "SQL"],
-            "job_history": [{"position": "UX Designer", "company": "Adobe", "years": "2020-2022"}],
-            "education": [{"degree": "B.A. in Design", "university": "RISD", "years": "2016-2020"}]
-        },
-        "Budi": {
-            "name": "Budi",
-            "phone": "081287654321",
-            "email": "budi@example.com",
-            "skills": ["Python", "HTML"],
-            "job_history": [{"position": "Graphic Designer", "company": "Canva", "years": "2017-2019"}],
-            "education": [{"degree": "B.F.A. in Graphic Design", "university": "SVA", "years": "2013-2017"}]
-        },
-        "Citra": {
-            "name": "Citra",
-            "phone": "081276543210",
-            "email": "citra@example.com",
-            "skills": ["Java", "SQL"],
-            "job_history": [{"position": "HR Specialist", "company": "IBM", "years": "2018-2021"}],
-            "education": [{"degree": "M.B.A.", "university": "Harvard", "years": "2014-2018"}]
-        }
-    }
-    # Extract name from text to determine which dummy data to return
-    for name in dummy_data:
-        if name in text:
-            return dummy_data[name]
-    return {"name": "Unknown", "phone": "N/A", "email": "N/A", "skills": [], "job_history": [], "education": []}
+import re
+
+# Daftar semua kemungkinan sinonim untuk setiap seksi
+# Didefinisikan di satu tempat agar mudah dikelola
+SECTION_KEYWORDS = {
+    'skills': r'Skills',
+    'summary': r'Summary|Objective|Profile',
+    'experience': r'Experience|Work History|Employment History',
+    'education': r'Education',
+    'highlights': r'Highlights',
+    'accomplishments': r'Accomplishments'
+}
+
+def extract_all_sections(text: str) -> dict:
+    """
+    Mengekstrak semua seksi dari teks CV menggunakan pendekatan terprogram.
+    1. Cari semua judul seksi dan lokasinya.
+    2. Urutkan berdasarkan lokasi.
+    3. Ekstrak konten di antara setiap pasangan judul.
+    """
+    all_keywords = []
+    for section_name, keywords in SECTION_KEYWORDS.items():
+        all_keywords.append(keywords)
+    
+    # Gabungkan semua keyword menjadi satu pola regex untuk menemukan semua judul sekaligus
+    combined_pattern = fr'^\s*({ "|".join(all_keywords) })'
+    
+    # Temukan semua judul dan posisinya
+    found_sections = []
+    for match in re.finditer(combined_pattern, text, re.MULTILINE | re.IGNORECASE):
+        # Cari nama seksi yang cocok dari SECTION_KEYWORDS
+        found_title = match.group(1).lower()
+        section_name = ''
+        for name, keywords in SECTION_KEYWORDS.items():
+            if re.search(fr'\b({keywords})\b', found_title, re.IGNORECASE):
+                section_name = name
+                break
+        
+        if section_name:
+            found_sections.append({
+                'name': section_name,
+                'start_index': match.start(),
+                'end_index': match.end()
+            })
+
+    # Jika tidak ada seksi yang ditemukan, kembalikan dictionary kosong
+    if not found_sections:
+        return {}
+
+    # Urutkan seksi berdasarkan indeks awal
+    found_sections.sort(key=lambda x: x['start_index'])
+    
+    # Ekstrak konten untuk setiap seksi
+    extracted_content = {}
+    for i, section in enumerate(found_sections):
+        content_start = section['end_index']
+        
+        # Tentukan akhir konten: awal seksi berikutnya atau akhir file
+        content_end = len(text)
+        if i + 1 < len(found_sections):
+            content_end = found_sections[i+1]['start_index']
+            
+        content = text[content_start:content_end].strip()
+        extracted_content[section['name']] = content
+
+    return extracted_content
+
+# Fungsi-fungsi di bawah ini sekarang menjadi lebih sederhana.
+# Mereka hanya perlu mengambil data dari hasil extract_all_sections.
+
+def extract_skills(text: str) -> str:
+    sections = extract_all_sections(text)
+    return sections.get('skills', '')
+
+def extract_experience(text: str) -> str:
+    sections = extract_all_sections(text)
+    return sections.get('experience', '')
+
+def extract_education(text: str) -> str:
+    sections = extract_all_sections(text)
+    return sections.get('education', '')

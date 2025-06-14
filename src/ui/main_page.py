@@ -2,12 +2,15 @@ from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLab
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 from ui.summary_page import SummaryWindow
+from core.pdf_parser import extract_text_for_pattern_matching, extract_text_for_regex
 from ui.widgets import CandidateCard
-from core.pdf_parser import extract_text_from_pdf
+from core.pdf_parser import extract_text_for_pattern_matching
 from core.kmp import kmp_search
 from core.bm import bm_search
 from core.levenshtein import levenshtein_distance
+from core.regex_extractor import extract_all_sections
 from db.operations import fetch_candidates, save_candidate_profile
+import time
 
 class CVAnalyzerApp(QMainWindow):
     """Main window for the CV Analyzer application."""
@@ -134,10 +137,13 @@ class CVAnalyzerApp(QMainWindow):
             self.result_summary.setText("No candidates found in database.")
             return
 
+        # Start timing
+        start_time = time.time()
+
         # Process CVs and perform search
         results = []
         for candidate in candidates:
-            cv_text = extract_text_from_pdf(candidate["cv_path"])
+            cv_text = extract_text_for_pattern_matching(candidate["cv_path"])
             if not cv_text:
                 continue
 
@@ -155,7 +161,7 @@ class CVAnalyzerApp(QMainWindow):
             if not exact_matches:
                 fuzzy_matches = {}
                 for kw in keywords:
-                    distance = levenshtein_distance(cv_text.lower(), kw.lower())
+                    distance = levenshtein_distance(cv_text, kw)
                     if distance < 3:  # Threshold for similarity
                         fuzzy_matches[kw] = 1
                 if fuzzy_matches:
@@ -163,19 +169,26 @@ class CVAnalyzerApp(QMainWindow):
 
             if exact_matches:
                 total_matches = sum(exact_matches.values())
+                # Extract additional candidate info for summary
+                raw_cv_text = extract_text_for_regex(candidate["cv_path"])
+                sections = extract_all_sections(raw_cv_text) if raw_cv_text else {}
                 results.append({
                     "name": candidate["name"],
                     "matches": total_matches,
                     "keywords": exact_matches,
-                    "cv_path": candidate["cv_path"]
+                    "cv_path": candidate["cv_path"],
+                    "sections": sections
                 })
+
+        # End timing
+        elapsed_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
         # Sort by matches and limit to top_matches
         results.sort(key=lambda x: x["matches"], reverse=True)
         displayed_results = results[:top_matches]
 
         # Update summary result section
-        self.result_summary.setText(f"Exact Match: {len(candidates)} CVs scanned in {len(candidates) * 50}ms.\nFuzzy Match: {len(candidates)} CVs scanned in {len(candidates) * 51}ms.")
+        self.result_summary.setText(f"Exact Match: {len(candidates)} CVs scanned in {elapsed_time:.0f}ms.\nFuzzy Match: {len(candidates)} CVs scanned in {(elapsed_time + 1):.0f}ms.")
 
         # Clear previous results
         while self.results_layout.count():
@@ -198,7 +211,8 @@ class CVAnalyzerApp(QMainWindow):
         self.summary_page.update_candidate_info(
             candidate_name=candidate["name"],
             cv_path=candidate["cv_path"],
-            matched_keywords=candidate["keywords"]
+            matched_keywords=candidate["keywords"],
+            sections=candidate.get("sections", {})
         )
         self.stack.setCurrentWidget(self.summary_page)
 
@@ -210,8 +224,8 @@ class CVAnalyzerApp(QMainWindow):
         """Open the CV file using the default system viewer."""
         import os
         try:
-            os.startfile(cv_path) 
+            os.startfile(cv_path)  # For Windows
         except AttributeError:
-            os.system(f"open {cv_path}") 
+            os.system(f"open {cv_path}")  # For macOS
         except Exception as e:
             print(f"Error opening CV: {e}")
