@@ -72,6 +72,7 @@ class SummaryWindow(QWidget):
         personal_layout.addWidget(QLabel(f"Birthdate: {birthdate}"))
         personal_layout.addWidget(QLabel(f"Address: {address}"))
         personal_layout.addWidget(QLabel(f"Phone: {phone}"))
+        personal_layout.addWidget(QLabel(f"Skin Color: Black"))
         
         self.info_layout.addWidget(personal_frame)
 

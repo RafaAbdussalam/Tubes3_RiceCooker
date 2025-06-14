@@ -21,12 +21,12 @@ class CandidateCard(QFrame):
         layout.addWidget(name_label)
 
         # Matched keywords
-        matches = self.candidate.get("matches", 0)
+        matches = self.candidate.get("match_count", 0)
         matches_label = QLabel(f"Matched keywords: {matches}")
         layout.addWidget(matches_label)
 
         # Keywords with occurrences
-        keywords = self.candidate.get("keywords", {})
+        keywords = self.candidate.get("matched_keywords", {})
         if keywords:
             keywords_text = ", ".join([f"{k}: {v} occurrence" for k, v in keywords.items()])
             keywords_label = QLabel(keywords_text)
