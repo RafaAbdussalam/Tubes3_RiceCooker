@@ -1,17 +1,18 @@
+# File: src/core/regex_extractor.py
+# PERBAIKAN: Logika parse_education dirombak total untuk menangani format kompleks.
+
 import re
 from collections import OrderedDict
 
-# Definisi header dari setiap seksi yang akan dicari
 SECTION_KEYWORDS = {
     'summary': r'summary|profile|objective|about me|professional summary',
-    'skills': r'skills|highlights|technical skills|core competencies|expertise',
-    'experience': r'experience|work experience|employment history|professional experience',
-    'education': r'education|academic background|qualifications',
-    'boundary': r'accomplishments|affiliations|interests|certifications|languages'
+    'skills': r'skills|highlights|technical skills|core competencies|expertise|proficiencies',
+    'experience': r'experience|work experience|employment history|professional experience|work history|professional background|work|employment',
+    'education': r'education|academic background|qualifications|education and training|academic history',
+    'boundary': r'accomplishments|affiliations|interests|certifications|languages|awards|projects|publications|references'
 }
 
 def clean_text(text: str) -> str:
-    """Membersihkan teks dari hasil ekstraksi PDF/OCR yang kotor."""
     if not text: return ""
     text = re.sub(r'[^\x00-\x7F]+', ' ', text)
     text = re.sub(r'[\u200b-\u200f\u202a-\u202e]', '', text)
@@ -24,7 +25,6 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 def extract_raw_sections(text: str) -> dict:
-    """Mengekstrak blok teks mentah untuk setiap seksi berdasarkan keywords."""
     cleaned_text = clean_text(text)
     all_kw_pattern = '|'.join(SECTION_KEYWORDS.values())
     title_pattern = re.compile(fr'^\s*({all_kw_pattern})\b\s*:?', re.IGNORECASE | re.MULTILINE)
@@ -42,7 +42,6 @@ def extract_raw_sections(text: str) -> dict:
     return sections
 
 def parse_skills(text_blocks: list) -> list:
-    """Parser skills yang menggabungkan baris terpotong dan mem-parsing secara kontekstual."""
     if not text_blocks: return []
     full_text = '\n'.join(text_blocks)
     processed_text = re.sub(r'\n(?![A-Z•*-])', ' ', full_text)
@@ -59,53 +58,51 @@ def parse_skills(text_blocks: list) -> list:
     cleaned_skills = [skill.strip(' .,') for skill in all_skills if len(skill.strip(' .,')) > 1]
     return list(OrderedDict.fromkeys(cleaned_skills))
 
-def parse_education(text: str) -> list:
-    """Parser pendidikan yang andal."""
-    if not text: return []
-    parsed_entries = []
-    lines = text.strip().split('\n')
-    for line in lines:
-        line = line.strip()
-        if not line: continue
-        year, degree, institution, description = 'N/A', 'N/A', 'N/A', None
-        if ':' in line:
-            parts = line.split(':', 1)
-            degree = parts[0].strip()
-            institution_part = parts[1].strip()
-            year_match = re.search(r'\b((19|20)\d{2})\b', institution_part)
-            if year_match:
-                year = year_match.group(0)
-                institution = re.sub(r'\s+', ' ', institution_part.replace(year, '')).strip()
-            else:
-                institution = institution_part
-        else:
-            degree = "Informasi Tambahan"
-            institution = "N/A"
-            description = line
-            year_match = re.search(r'\b((19|20)\d{2})\b', line)
-            if year_match: year = year_match.group(0)
-        parsed_entry = {'year': year, 'degree': degree, 'institution': institution}
-        if description: parsed_entry['description'] = description
-        if (parsed_entry.get('degree') != 'N/A' or parsed_entry.get('institution') != 'N/A') and parsed_entry not in parsed_entries:
-            parsed_entries.append(parsed_entry)
-    return parsed_entries
-
 def parse_experience(text: str) -> list:
-    """
-    Parser experience universal dengan pendekatan "Jangkar Tanggal".
-    """
-    if not text:
-        return []
-
+    if not text: return []
     experiences = []
     current_experience = None
-
-    # Pola tanggal yang fleksibel, bisa menangani "Month YYYY" dan "MM/YYYY"
     date_pattern = re.compile(
         r'((?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4})\s*to\s*(?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4}|Present|Current))',
         re.IGNORECASE
     )
+    lines = text.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        date_match = date_pattern.search(line)
+        if date_match:
+            if current_experience:
+                current_experience['description'] = '\n'.join(current_experience['description']).strip()
+                experiences.append(current_experience)
+            date_range = date_match.group(1).strip()
+            company = line[:date_match.start()].strip()
+            position = line[date_match.end():].strip()
+            current_experience = {
+                'date_range': date_range,
+                'company': company.replace('Company Name', '').strip(' ,'),
+                'position': position.strip(' ,'),
+                'description': []
+            }
+        elif current_experience:
+            current_experience['description'].append(line)
+    if current_experience:
+        current_experience['description'] = '\n'.join(current_experience['description']).strip()
+        experiences.append(current_experience)
+    return experiences
 
+def parse_education(text: str) -> list:
+    """
+    Parser pendidikan yang ditulis ulang untuk menangani format kompleks dan beragam.
+    """
+    if not text:
+        return []
+
+    # Daftar kata kunci untuk membantu identifikasi
+    degree_keywords = ['Associate', 'Associates', 'Bachelors', 'Certificate', 'Diploma']
+    institution_keywords = ['College', 'School', 'University']
+    
+    parsed_entries = []
     lines = text.strip().split('\n')
 
     for line in lines:
@@ -113,57 +110,64 @@ def parse_experience(text: str) -> list:
         if not line:
             continue
 
-        date_match = date_pattern.search(line)
+        year, degree, institution, description = 'N/A', 'N/A', 'N/A', ''
 
-        # Jika sebuah baris mengandung pola tanggal, anggap itu awal entri baru.
-        if date_match:
-            # Simpan dulu entri sebelumnya jika ada
-            if current_experience:
-                current_experience['description'] = '\n'.join(current_experience['description']).strip()
-                experiences.append(current_experience)
+        # 1. Cari tahun terlebih dahulu
+        year_match = re.search(r'\b((19|20)\d{2})\b', line)
+        if year_match:
+            year = year_match.group(0)
 
-            # Buat entri baru
-            date_range = date_match.group(1).strip()
-            
-            # Teks sebelum tanggal adalah Perusahaan
-            company = line[:date_match.start()].strip()
-            # Teks setelah tanggal adalah Posisi
-            position = line[date_match.end():].strip()
-
-            current_experience = {
-                'date_range': date_range,
-                'company': company.replace('Company Name', '').strip(' ,'),
-                'position': position.strip(' ,'),
-                'description': [] # Siapkan list untuk menampung deskripsi
-            }
+        # 2. Cari gelar & institusi berdasarkan kata kunci
+        found_institution = ""
+        for keyword in institution_keywords:
+            # Cari institusi yang mengandung keyword, contoh "Northern Maine Community College"
+            match = re.search(fr'([A-Za-z\s,]*{keyword}[A-Za-z\s,]*)', line, re.IGNORECASE)
+            if match:
+                found_institution = match.group(1).strip()
+                break
         
-        # Jika bukan baris tanggal, maka ini adalah bagian dari deskripsi pekerjaan saat ini.
-        elif current_experience:
-            current_experience['description'].append(line)
+        found_degree = ""
+        for keyword in degree_keywords:
+            # Cari gelar yang mengandung keyword, contoh "Associate: Accounting"
+            match = re.search(fr'({keyword}[A-Za-z\s:]*)', line, re.IGNORECASE)
+            if match:
+                found_degree = match.group(1).strip()
+                break
 
-    # Simpan entri pekerjaan terakhir setelah loop selesai
-    if current_experience:
-        current_experience['description'] = '\n'.join(current_experience['description']).strip()
-        experiences.append(current_experience)
+        # 3. Tentukan nilai akhir berdasarkan apa yang ditemukan
+        if found_institution and found_degree:
+            institution = found_institution
+            degree = found_degree
+        elif found_institution: # Hanya institusi ditemukan
+            institution = found_institution
+            # Sisa teks dianggap sebagai gelar/deskripsi
+            degree = line.replace(institution, '').replace(year, '').strip(' :,')
+        elif found_degree: # Hanya gelar ditemukan
+            degree = found_degree
+            # Sisa teks dianggap sebagai institusi
+            institution = line.replace(degree, '').replace(year, '').strip(' :,')
+        else: # Tidak ada keyword yang cocok, anggap sebagai deskripsi
+            degree = "Informasi Tambahan / Kursus Profesional"
+            description = line
 
-    return experiences
+        entry = {'year': year, 'degree': degree, 'institution': institution}
+        if description:
+            entry['description'] = description
+        
+        parsed_entries.append(entry)
+            
+    return parsed_entries
+
 
 def extract_all_sections(text: str) -> dict:
-    """Fungsi utama untuk mengekstrak semua informasi dari teks CV."""
     sections = extract_raw_sections(text)
-    
     skills_blocks = sections.get('skills', [])
     skills_list = parse_skills(skills_blocks)
-    
     experience_text = '\n'.join(sections.get('experience', []))
     experience_list = parse_experience(experience_text)
-    
     education_text = '\n'.join(sections.get('education', []))
     education_list = parse_education(education_text)
-    
     summary_text = '\n'.join(sections.get('summary', []))
-
-    # Mengembalikan dengan kunci 'experience' sesuai permintaan Anda.
     return {
         'summary': clean_text(summary_text).replace("\n", " ") or 'N/A',
         'skills': skills_list,
