@@ -280,19 +280,21 @@ class SummaryWindow(QWidget):
             
             for entry in job_entries:
                 if entry.strip():
-                    # Pisahkan judul, tanggal, dan deskripsi
-                    parts = entry.split('\n')
-                    if len(parts) >= 2:
-                        title = parts[0].strip()
-                        date = parts[1].strip()
-                        description = '\n'.join(parts[2:]).strip()
+                    # Pisahkan judul, lokasi, tanggal, dan deskripsi
+                    parts = [p.strip() for p in entry.split('\n') if p.strip()]
+                    if len(parts) >= 1:
+                        title = parts[0]
+                        location = parts[1] if len(parts) > 1 and not re.search(r'\d{2}/\d{4}', parts[1]) else ""
+                        date = next((p for p in parts if re.search(r'\d{2}/\d{4}', p)), "")
+                        description = '\n'.join(p for p in parts if p not in [title, location, date])
                         
                         # Format dengan HTML untuk styling yang lebih baik
                         formatted_text += f"""
-                        <div style='margin-bottom: 20px;'>
+                        <div style='margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;'>
                             <p style='font-size: 14px; font-weight: bold; color: #2E7D32; margin: 0;'>{title}</p>
-                            <p style='font-size: 12px; color: #666; margin: 5px 0;'>{date}</p>
-                            <div style='margin-left: 20px;'>
+                            {f'<p style="font-size: 12px; color: #666; margin: 3px 0;">{location}</p>' if location else ''}
+                            {f'<p style="font-size: 12px; color: #666; margin: 3px 0;">{date}</p>' if date else ''}
+                            <div style='margin-left: 20px; color: #333;'>
                                 {description.replace('•', '<br>•')}
                             </div>
                         </div>
@@ -324,10 +326,55 @@ class SummaryWindow(QWidget):
         """)
         education_layout = QVBoxLayout(education_frame)
         
-        education_display = QTextEdit(education_text)
+        education_display = QTextEdit()
         education_display.setReadOnly(True)
         education_display.setFont(QFont("Segoe UI", 11))
-        education_display.setFixedHeight(120)
+        education_display.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 15px;
+                line-height: 1.6;
+            }
+        """)
+        
+        # Format teks education
+        if education_text and education_text != 'Tidak ditemukan':
+            # Pisahkan setiap entri pendidikan
+            edu_entries = education_text.split('\n\n')
+            formatted_text = ""
+            
+            for entry in edu_entries:
+                if entry.strip():
+                    # Pisahkan judul, institusi, tanggal, dan deskripsi
+                    parts = [p.strip() for p in entry.split('\n') if p.strip()]
+                    if len(parts) >= 1:
+                        title = parts[0]
+                        institution = parts[1] if len(parts) > 1 and not re.search(r'\d{4}', parts[1]) else ""
+                        date = next((p for p in parts if re.search(r'\d{4}', p)), "")
+                        description = '\n'.join(p for p in parts if p not in [title, institution, date])
+                        
+                        # Format dengan HTML untuk styling yang lebih baik
+                        formatted_text += f"""
+                        <div style='margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-radius: 8px;'>
+                            <p style='font-size: 13px; font-weight: bold; color: #2E7D32; margin: 0;'>{title}</p>
+                            {f'<p style="font-size: 11px; color: #666; margin: 3px 0;">{institution}</p>' if institution else ''}
+                            {f'<p style="font-size: 11px; color: #666; margin: 3px 0;">{date}</p>' if date else ''}
+                            <div style='margin-left: 15px; color: #333; font-size: 12px;'>
+                                {description.replace('•', '<br>•')}
+                            </div>
+                        </div>
+                        """
+            
+            education_display.setHtml(formatted_text)
+        else:
+            education_display.setText("Tidak ada data riwayat pendidikan.")
+        
+        # Set tinggi minimum dan maksimum
+        education_display.setMinimumHeight(200)
+        education_display.setMaximumHeight(400)
+        
         education_layout.addWidget(education_display)
         self.info_layout.addWidget(education_frame)
 
