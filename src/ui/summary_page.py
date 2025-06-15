@@ -136,8 +136,8 @@ class SummaryWindow(QWidget):
         
         # Ambil data yang diekstrak dari CV oleh backend
         skills_text = summary_data.get('skills', 'Tidak ditemukan').strip()
-        experience_text = summary_data.get('experience', 'Tidak ditemukan').strip()
-        education_text = summary_data.get('education', 'Tidak ditemukan').strip()
+        experience_list = summary_data.get('experience', [])
+        education_list = summary_data.get('education', [])
 
         # --- 3. Tampilkan Informasi Pribadi ---
         personal_frame = QFrame()
@@ -273,33 +273,19 @@ class SummaryWindow(QWidget):
         """)
         
         # Format teks experience
-        if experience_text and experience_text != 'Tidak ditemukan':
-            # Pisahkan setiap job entry
-            job_entries = experience_text.split('\n\n')
+        if experience_list:
             formatted_text = ""
-            
-            for entry in job_entries:
-                if entry.strip():
-                    # Pisahkan judul, lokasi, tanggal, dan deskripsi
-                    parts = [p.strip() for p in entry.split('\n') if p.strip()]
-                    if len(parts) >= 1:
-                        title = parts[0]
-                        location = parts[1] if len(parts) > 1 and not re.search(r'\d{2}/\d{4}', parts[1]) else ""
-                        date = next((p for p in parts if re.search(r'\d{2}/\d{4}', p)), "")
-                        description = '\n'.join(p for p in parts if p not in [title, location, date])
-                        
-                        # Format dengan HTML untuk styling yang lebih baik
-                        formatted_text += f"""
-                        <div style='margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;'>
-                            <p style='font-size: 14px; font-weight: bold; color: #2E7D32; margin: 0;'>{title}</p>
-                            {f'<p style="font-size: 12px; color: #666; margin: 3px 0;">{location}</p>' if location else ''}
-                            {f'<p style="font-size: 12px; color: #666; margin: 3px 0;">{date}</p>' if date else ''}
-                            <div style='margin-left: 20px; color: #333;'>
-                                {description.replace('•', '<br>•')}
-                            </div>
-                        </div>
-                        """
-            
+            for exp in experience_list:
+                formatted_text += f"""
+                <div style='margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;'>
+                    <p style='font-size: 14px; font-weight: bold; color: #2E7D32; margin: 0;'>{exp.get('position', 'N/A')}</p>
+                    <p style="font-size: 12px; color: #666; margin: 3px 0;">{exp.get('company', 'N/A')}</p>
+                    <p style="font-size: 12px; color: #666; margin: 3px 0;">{exp.get('date_range', 'N/A')}</p>
+                    <div style='margin-left: 20px; color: #333;'>
+                        {exp.get('description', '').replace('•', '<br>•')}
+                    </div>
+                </div>
+                """
             experience_display.setHtml(formatted_text)
         else:
             experience_display.setText("Tidak ada data pengalaman kerja.")
@@ -340,33 +326,16 @@ class SummaryWindow(QWidget):
         """)
         
         # Format teks education
-        if education_text and education_text != 'Tidak ditemukan':
-            # Pisahkan setiap entri pendidikan
-            edu_entries = education_text.split('\n\n')
+        if education_list:
             formatted_text = ""
-            
-            for entry in edu_entries:
-                if entry.strip():
-                    # Pisahkan judul, institusi, tanggal, dan deskripsi
-                    parts = [p.strip() for p in entry.split('\n') if p.strip()]
-                    if len(parts) >= 1:
-                        title = parts[0]
-                        institution = parts[1] if len(parts) > 1 and not re.search(r'\d{4}', parts[1]) else ""
-                        date = next((p for p in parts if re.search(r'\d{4}', p)), "")
-                        description = '\n'.join(p for p in parts if p not in [title, institution, date])
-                        
-                        # Format dengan HTML untuk styling yang lebih baik
-                        formatted_text += f"""
-                        <div style='margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-radius: 8px;'>
-                            <p style='font-size: 13px; font-weight: bold; color: #2E7D32; margin: 0;'>{title}</p>
-                            {f'<p style="font-size: 11px; color: #666; margin: 3px 0;">{institution}</p>' if institution else ''}
-                            {f'<p style="font-size: 11px; color: #666; margin: 3px 0;">{date}</p>' if date else ''}
-                            <div style='margin-left: 15px; color: #333; font-size: 12px;'>
-                                {description.replace('•', '<br>•')}
-                            </div>
-                        </div>
-                        """
-            
+            for edu in education_list:
+                year_text = edu.get('year', 'N/A')
+                formatted_text += f"""
+                <div style='margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-radius: 8px;'>
+                    <p style='font-size: 13px; font-weight: bold; color: #2E7D32; margin: 0;'>{edu.get('degree', 'N/A')}</p>
+                    <p style="font-size: 11px; color: #666; margin: 3px 0;">{edu.get('institution', 'N/A')}</p>
+                    <p style="font-size: 11px; color: #666; margin: 3px 0;">{year_text}</p>
+                </div>"""
             education_display.setHtml(formatted_text)
         else:
             education_display.setText("Tidak ada data riwayat pendidikan.")
