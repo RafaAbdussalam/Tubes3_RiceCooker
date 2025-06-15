@@ -151,20 +151,20 @@ class CVAnalyzerApp(QMainWindow):
         
         self.results_layout.addStretch()
         
-    # Di dalam kelas CVAnalyzerApp di main_page.py
     def switch_to_summary(self, candidate_data):
         """Beralih ke halaman ringkasan setelah mengambil data dari backend."""
         applicant_id = candidate_data['id']
+        cv_path = candidate_data['cv_path'] # Ambil cv_path dari data kartu
         
-        # Panggil backend untuk mendapatkan data ringkasan yang sudah diproses
-        summary_data = get_applicant_summary(applicant_id)
+        # Panggil backend dengan DUA argumen untuk memastikan file yang benar diproses
+        summary_data = get_applicant_summary(applicant_id, cv_path)
         
         if summary_data:
             self.summary_page.update_candidate_info(summary_data)
             self.stack.setCurrentWidget(self.summary_page)
         else:
             QMessageBox.critical(self, "Error", f"Tidak dapat menemukan detail untuk applicant ID: {applicant_id}")
-
+            
     def switch_to_search(self):
         """Switch back to the search page."""
         self.stack.setCurrentWidget(self.search_page)

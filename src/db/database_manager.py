@@ -3,6 +3,7 @@ from mysql.connector import Error
 
 class DatabaseManager:
     def __init__(self, config):
+        # print("test0")
         self.config = config
         self.connection = None
         try:
@@ -11,6 +12,7 @@ class DatabaseManager:
                 user=self.config['user'],
                 password=self.config['password']
             )
+            # print("test1")
             cursor_init = conn_init.cursor()
             cursor_init.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
             cursor_init.close()

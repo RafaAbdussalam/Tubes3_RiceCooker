@@ -214,25 +214,24 @@ def search_cvs(keywords: list[str], algorithm: str, top_n: int):
         'failed_files': failed_files
     }
 
-def get_applicant_summary(applicant_id: int):
-    """Mengambil profil dari DB dan mengekstrak info dari CV untuk halaman ringkasan."""
+def get_applicant_summary(applicant_id: int, cv_path: str):
+    """
+    Mengambil profil dari DB dan mengekstrak info dari CV untuk halaman ringkasan.
+    Fungsi ini sekarang menerima cv_path secara langsung untuk memastikan konsistensi.
+    """
     db_manager = _get_db_manager()
     conn = db_manager.get_connection()
-    # cursor = conn.cursor(dictionary=True)
     cursor = conn.cursor(buffered=True, dictionary=True)
     
-    cursor.execute("""
-        SELECT p.*, d.cv_path 
-        FROM ApplicantProfile p
-        JOIN ApplicationDetail d ON p.applicant_id = d.applicant_id
-        WHERE p.applicant_id = %s
-    """, (applicant_id,))
+    # Query sekarang hanya untuk mengambil data profil, bukan path lagi
+    cursor.execute("SELECT * FROM ApplicantProfile WHERE applicant_id = %s", (applicant_id,))
     profile_data = cursor.fetchone()
 
     if not profile_data:
+        cursor.close()
         return None
 
-    cv_path = profile_data['cv_path']
+    # Gunakan cv_path yang diberikan langsung, tidak lagi dari hasil query
     cv_text_for_regex = extract_text_for_regex(cv_path)
     if not cv_text_for_regex:
         print(f"Gagal memproses file untuk regex: {cv_path}")

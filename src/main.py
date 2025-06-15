@@ -6,13 +6,10 @@ def main():
     """Fungsi utama untuk menjalankan aplikasi."""
     # Inisialisasi QApplication
     app = QApplication(sys.argv)
-    
     # Buat instance window utama
     window = CVAnalyzerApp()
-    
     # Tampilkan window
     window.show()
-    
     # Jalankan event loop aplikasi
     sys.exit(app.exec_())
 
