@@ -1,101 +1,81 @@
-# File: src/core/regex_extractor.py (Versi Perbaikan Final v3)
-
 import re
-from collections import OrderedDict
-# Menambahkan 'qualifications', 'professional profile', 'leadership', 'activities and honors', dll.
-# untuk mencakup variasi dari CV yang diberikan.
+
+# Daftar semua kemungkinan sinonim untuk setiap seksi
+# Didefinisikan di satu tempat agar mudah dikelola
 SECTION_KEYWORDS = {
-    'summary': r'summary|objective|profile|about me|professional profile|career focus',
-    'skills': r'skills|technical skills|proficiencies|technologies|qualifications',
-    'experience': r'experience|work history|employment history|professional experience',
-    'education': r'education|education and training|academic background|academic qualifications',
-    'highlights': r'highlights',
-    'accomplishments': r'accomplishments|leadership|activities and honors|awards and professional recognition',
-    'projects': r'projects|personal projects|projects at work'
+    'skills': r'Skills',
+    'summary': r'Summary|Objective|Profile',
+    'experience': r'Experience|Work History|Employment History',
+    'education': r'Education',
+    'highlights': r'Highlights',
+    'accomplishments': r'Accomplishments'
 }
 
 def extract_all_sections(text: str) -> dict:
     """
-    Mengekstrak semua seksi dari teks CV dengan pendekatan yang lebih andal.
-    1. Cari semua judul seksi yang diketahui dan lokasinya.
-    2. Urutkan berdasarkan lokasi kemunculannya.
-    3. Ekstrak konten yang berada di antara setiap pasangan judul.
+    Mengekstrak semua seksi dari teks CV menggunakan pendekatan terprogram.
+    1. Cari semua judul seksi dan lokasinya.
+    2. Urutkan berdasarkan lokasi.
+    3. Ekstrak konten di antara setiap pasangan judul.
     """
-    all_keywords_pattern = '|'.join(v for v in SECTION_KEYWORDS.values())
-    # Pola ini sekarang lebih fleksibel untuk menangani judul yang mungkin diikuti oleh titik dua
-    section_title_pattern = re.compile(fr'^\s*({all_keywords_pattern})\b\s*:?', re.IGNORECASE | re.MULTILINE)
-
-    found_sections = []
-    for match in section_title_pattern.finditer(text):
-        matched_title = match.group(1).lower()
-        for section_name, keywords_pattern in SECTION_KEYWORDS.items():
-            if re.search(fr'\b({keywords_pattern})\b', matched_title, re.IGNORECASE):
-                found_sections.append({
-                    'name': section_name,
-                    'title_start': match.start(),
-                    'content_start': match.end()
-                })
-                break
+    all_keywords = []
+    for section_name, keywords in SECTION_KEYWORDS.items():
+        all_keywords.append(keywords)
     
+    # Gabungkan semua keyword menjadi satu pola regex untuk menemukan semua judul sekaligus
+    combined_pattern = fr'^\s*({ "|".join(all_keywords) })'
+    
+    # Temukan semua judul dan posisinya
+    found_sections = []
+    for match in re.finditer(combined_pattern, text, re.MULTILINE | re.IGNORECASE):
+        # Cari nama seksi yang cocok dari SECTION_KEYWORDS
+        found_title = match.group(1).lower()
+        section_name = ''
+        for name, keywords in SECTION_KEYWORDS.items():
+            if re.search(fr'\b({keywords})\b', found_title, re.IGNORECASE):
+                section_name = name
+                break
+        
+        if section_name:
+            found_sections.append({
+                'name': section_name,
+                'start_index': match.start(),
+                'end_index': match.end()
+            })
+
+    # Jika tidak ada seksi yang ditemukan, kembalikan dictionary kosong
     if not found_sections:
         return {}
 
-    extracted_content = OrderedDict()
+    # Urutkan seksi berdasarkan indeks awal
+    found_sections.sort(key=lambda x: x['start_index'])
+    
+    # Ekstrak konten untuk setiap seksi
+    extracted_content = {}
     for i, section in enumerate(found_sections):
-        content_start = section['content_start']
+        content_start = section['end_index']
         
+        # Tentukan akhir konten: awal seksi berikutnya atau akhir file
         content_end = len(text)
         if i + 1 < len(found_sections):
-            content_end = found_sections[i+1]['title_start']
-        
+            content_end = found_sections[i+1]['start_index']
+            
         content = text[content_start:content_end].strip()
-        
-        # Menghapus bullet points, karakter aneh, dan spasi berlebih
-        content = re.sub(r'^\s*[•*-]\s*', '', content, flags=re.MULTILINE)
-        content = content.replace('ï¼', ':')
-        content = content.replace('â€', '') # Menghapus karakter artefak
-        content = content.replace('Â', '')   # Menghapus karakter artefak
-        content = re.sub(r'\s{2,}', ' ', content) # Mengganti spasi ganda dengan tunggal
-        
-        if content:
-            extracted_content[section['name']] = content
+        extracted_content[section['name']] = content
 
-    return dict(extracted_content)
+    return extracted_content
+
+# Fungsi-fungsi di bawah ini sekarang menjadi lebih sederhana.
+# Mereka hanya perlu mengambil data dari hasil extract_all_sections.
 
 def extract_skills(text: str) -> str:
-    """
-    Fungsi yang diperbaiki: Mengekstrak, membersihkan, dan menstandarkan format skills.
-    """
     sections = extract_all_sections(text)
-    
-    # Mengambil konten mentah dari seksi-seksi yang relevan
-    raw_content_list = []
-    for key in ['skills', 'highlights', 'accomplishments']:
-        if key in sections and sections[key]:
-            raw_content_list.append(sections[key])
-    
-    if not raw_content_list:
-        return "Tidak dapat menemukan bagian Skills, Highlights, atau Accomplishments."
-    
-    full_content_str = ' '.join(raw_content_list)
-
-    # Menambahkan titik koma (;) ke dalam daftar pemisah [;,\n•*-]
-    # Ini akan menggantikan setiap titik koma, koma, baris baru, atau bullet point dengan '|'
-    normalized_str = re.sub(r'\s+and\s+|\s+etc\s*|[;,\n•*-]|A\b', '|', full_content_str, flags=re.IGNORECASE)
-    
-    # Pisahkan menjadi skill individual, bersihkan spasi, dan buang yang kosong
-    skills_list = [skill.strip() for skill in normalized_str.split('|') if len(skill.strip()) > 1]
-    
-    # Menghilangkan duplikat sambil mempertahankan urutan
-    unique_skills = list(OrderedDict.fromkeys(skills_list))
-    
-    # Kembalikan sebagai satu string yang dipisahkan oleh baris baru
-    return '\n'.join(unique_skills)
+    return sections.get('skills', '')
 
 def extract_experience(text: str) -> str:
     sections = extract_all_sections(text)
-    return sections.get('experience', "Tidak dapat menemukan bagian Experience.")
+    return sections.get('experience', '')
 
 def extract_education(text: str) -> str:
     sections = extract_all_sections(text)
-    return sections.get('education', "Tidak dapat menemukan bagian Education.")
+    return sections.get('education', '')
