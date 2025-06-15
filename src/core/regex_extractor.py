@@ -91,48 +91,61 @@ def parse_education(text: str) -> list:
     return parsed_entries
 
 def parse_experience(text: str) -> list:
-    """Logika parsing experience definitif berdasarkan data debug."""
+    """
+    Parser experience universal dengan pendekatan "Jangkar Tanggal".
+    """
     if not text:
         return []
 
-    text = re.sub(r'O\s+fice', 'Office', text, flags=re.IGNORECASE)
-    
-    # 1. Gunakan pola [nomor].\n sebagai pemisah entri yang paling andal
-    entries = re.split(r'\s*\d\.\s*\n?', text)
-    
     experiences = []
-    for entry_block in entries:
-        entry_block = entry_block.strip()
-        if not entry_block:
+    current_experience = None
+
+    # Pola tanggal yang fleksibel, bisa menangani "Month YYYY" dan "MM/YYYY"
+    date_pattern = re.compile(
+        r'((?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4})\s*to\s*(?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4}|Present|Current))',
+        re.IGNORECASE
+    )
+
+    lines = text.strip().split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
             continue
 
-        date_pattern = r'(\d{2}/\d{4}\s*to\s*\d{2}/\d{4})'
-        position, company, date_range, description = "N/A", "N/A", "N/A", ""
-        
-        description_lines = []
-        found_main_line = False
+        date_match = date_pattern.search(line)
 
-        # 2. Proses setiap baris di dalam blok untuk menemukan "baris utama"
-        for line in entry_block.split('\n'):
-            date_match = re.search(date_pattern, line)
+        # Jika sebuah baris mengandung pola tanggal, anggap itu awal entri baru.
+        if date_match:
+            # Simpan dulu entri sebelumnya jika ada
+            if current_experience:
+                current_experience['description'] = '\n'.join(current_experience['description']).strip()
+                experiences.append(current_experience)
+
+            # Buat entri baru
+            date_range = date_match.group(1).strip()
             
-            if date_match and not found_main_line:
-                date_range = date_match.group(1).strip()
-                position = line[:date_match.start()].strip()
-                company = line[date_match.end():].strip()
-                found_main_line = True
-            else:
-                description_lines.append(line)
-        
-        description = '\n'.join(description_lines).strip()
-        
-        if date_range != "N/A":
-             experiences.append({
+            # Teks sebelum tanggal adalah Perusahaan
+            company = line[:date_match.start()].strip()
+            # Teks setelah tanggal adalah Posisi
+            position = line[date_match.end():].strip()
+
+            current_experience = {
                 'date_range': date_range,
-                'position': position,
-                'company': company,
-                'description': description
-            })
+                'company': company.replace('Company Name', '').strip(' ,'),
+                'position': position.strip(' ,'),
+                'description': [] # Siapkan list untuk menampung deskripsi
+            }
+        
+        # Jika bukan baris tanggal, maka ini adalah bagian dari deskripsi pekerjaan saat ini.
+        elif current_experience:
+            current_experience['description'].append(line)
+
+    # Simpan entri pekerjaan terakhir setelah loop selesai
+    if current_experience:
+        current_experience['description'] = '\n'.join(current_experience['description']).strip()
+        experiences.append(current_experience)
+
     return experiences
 
 def extract_all_sections(text: str) -> dict:
