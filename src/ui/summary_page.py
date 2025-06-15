@@ -4,7 +4,7 @@ from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt
 from core.pdf_parser import extract_text_for_regex
 from core.regex_extractor import extract_all_sections
-from datetime import date
+from datetime import date as datetime_date  # Mengubah nama import untuk menghindari konflik
 
 class SummaryWindow(QWidget):
     """Widget for displaying the CV summary page."""
@@ -126,8 +126,13 @@ class SummaryWindow(QWidget):
         phone = profile.get('phone_number', 'N/A')
         
         # Konversi birthdate ke string jika berupa datetime.date
-        if isinstance(birthdate, date):
-            birthdate = birthdate.strftime('%d %B %Y')
+        try:
+            if isinstance(birthdate, datetime_date):
+                birthdate = birthdate.strftime('%d %B %Y')
+            elif birthdate is None:
+                birthdate = 'N/A'
+        except Exception:
+            birthdate = str(birthdate) if birthdate else 'N/A'
         
         # Ambil data yang diekstrak dari CV oleh backend
         skills_text = summary_data.get('skills', 'Tidak ditemukan').strip()
@@ -253,10 +258,54 @@ class SummaryWindow(QWidget):
         """)
         experience_layout = QVBoxLayout(experience_frame)
         
-        experience_display = QTextEdit(experience_text)
+        # Buat QTextEdit dengan styling yang lebih baik
+        experience_display = QTextEdit()
         experience_display.setReadOnly(True)
         experience_display.setFont(QFont("Segoe UI", 11))
-        experience_display.setFixedHeight(150)
+        experience_display.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 15px;
+                line-height: 1.6;
+            }
+        """)
+        
+        # Format teks experience
+        if experience_text and experience_text != 'Tidak ditemukan':
+            # Pisahkan setiap job entry
+            job_entries = experience_text.split('\n\n')
+            formatted_text = ""
+            
+            for entry in job_entries:
+                if entry.strip():
+                    # Pisahkan judul, tanggal, dan deskripsi
+                    parts = entry.split('\n')
+                    if len(parts) >= 2:
+                        title = parts[0].strip()
+                        date = parts[1].strip()
+                        description = '\n'.join(parts[2:]).strip()
+                        
+                        # Format dengan HTML untuk styling yang lebih baik
+                        formatted_text += f"""
+                        <div style='margin-bottom: 20px;'>
+                            <p style='font-size: 14px; font-weight: bold; color: #2E7D32; margin: 0;'>{title}</p>
+                            <p style='font-size: 12px; color: #666; margin: 5px 0;'>{date}</p>
+                            <div style='margin-left: 20px;'>
+                                {description.replace('•', '<br>•')}
+                            </div>
+                        </div>
+                        """
+            
+            experience_display.setHtml(formatted_text)
+        else:
+            experience_display.setText("Tidak ada data pengalaman kerja.")
+        
+        # Set tinggi minimum dan maksimum
+        experience_display.setMinimumHeight(300)
+        experience_display.setMaximumHeight(500)
+        
         experience_layout.addWidget(experience_display)
         self.info_layout.addWidget(experience_frame)
 
