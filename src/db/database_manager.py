@@ -10,7 +10,8 @@ class DatabaseManager:
             conn_init = mysql.connector.connect(
                 host=self.config['host'],
                 user=self.config['user'],
-                password=self.config['password']
+                password=self.config['password'],
+                use_pure = True
             )
             # print("test1")
             cursor_init = conn_init.cursor()
@@ -19,7 +20,7 @@ class DatabaseManager:
             conn_init.close()
             print(f"Database '{self.config['database']}' is ready.")
 
-            self.connection = mysql.connector.connect(**self.config)
+            self.connection = mysql.connector.connect(**self.config, use_pure=True)
             if self.connection.is_connected():
                 self._create_tables()
 
@@ -65,7 +66,7 @@ class DatabaseManager:
     def get_connection(self):
         if not self.connection or not self.connection.is_connected():
             try:
-                self.connection = mysql.connector.connect(**self.config)
+                self.connection = mysql.connector.connect(**self.config, use_pure=True)
             except Error as e:
                 print(f"Gagal connect ke database: {e}")
                 return None
