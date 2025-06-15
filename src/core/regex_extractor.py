@@ -59,36 +59,74 @@ def parse_skills(text_blocks: list) -> list:
     return list(OrderedDict.fromkeys(cleaned_skills))
 
 def parse_experience(text: str) -> list:
-    if not text: return []
+    """
+    Parser experience universal dengan pendekatan dua tahap yang fleksibel.
+    """
+    if not text:
+        return []
+
+    # Tahap 1: Normalisasi Tanggal. Gabungkan tanggal yang terpisah oleh newline.
+    # Contoh: "January 2004\nto\nJanuary 2012" -> "January 2004 to January 2012"
+    text = re.sub(
+        r'([A-Za-z]+\s+\d{4})\s*\n\s*to\s*\n\s*([A-Za-z]+\s+\d{4}|Present|Current)',
+        r'\1 to \2',
+        text,
+        flags=re.IGNORECASE
+    )
+
+    # Tahap 2: Parsing dengan "Jangkar Tanggal"
     experiences = []
     current_experience = None
+    
+    # Pola tanggal yang fleksibel untuk mencari jangkar
     date_pattern = re.compile(
         r'((?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4})\s*to\s*(?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4}|Present|Current))',
         re.IGNORECASE
     )
+
     lines = text.strip().split('\n')
+
     for line in lines:
         line = line.strip()
-        if not line: continue
+        if not line:
+            continue
+
         date_match = date_pattern.search(line)
+
+        # Jika sebuah baris mengandung pola tanggal, anggap itu awal entri baru.
         if date_match:
+            # Simpan dulu entri sebelumnya jika ada
             if current_experience:
                 current_experience['description'] = '\n'.join(current_experience['description']).strip()
                 experiences.append(current_experience)
+
+            # Buat entri baru
             date_range = date_match.group(1).strip()
-            company = line[:date_match.start()].strip()
-            position = line[date_match.end():].strip()
+            # Asumsi: baris ini hanya berisi tanggal, info lain ada di baris berikutnya
             current_experience = {
                 'date_range': date_range,
-                'company': company.replace('Company Name', '').strip(' ,'),
-                'position': position.strip(' ,'),
+                'company': "N/A",
+                'position': "N/A",
                 'description': []
             }
+        
+        # Jika bukan baris tanggal, ini adalah bagian dari entri saat ini
         elif current_experience:
-            current_experience['description'].append(line)
+            # Baris pertama setelah tanggal biasanya adalah Perusahaan dan Posisi
+            if current_experience.get('company') == "N/A" and current_experience.get('position') == "N/A":
+                # Heuristik: Pisahkan company dan position.
+                # Contoh: Company Name City, State Supervisor
+                # Untuk simple, kita gabung saja jadi satu di posisi
+                current_experience['position'] = line
+            else:
+                # Baris-baris berikutnya adalah deskripsi
+                current_experience['description'].append(line)
+
+    # Simpan entri pekerjaan terakhir setelah loop selesai
     if current_experience:
         current_experience['description'] = '\n'.join(current_experience['description']).strip()
         experiences.append(current_experience)
+
     return experiences
 
 def parse_education(text: str) -> list:
