@@ -15,7 +15,8 @@ from core.pdf_parser import extract_text_for_pattern_matching, extract_text_for_
 from core.kmp import kmp_search
 from core.bm import bm_search
 from core.levenshtein import levenshtein_distance
-from core.regex_extractor import extract_skills, extract_experience, extract_education, extract_all_sections
+# from core.regex_extractor import extract_skills, extract_experience, extract_education, extract_all_sections
+from core.regex_extractor import extract_all_sections
 from core.aho_corasick import AhoCorasick
 
 _db_manager_instance = None
@@ -214,16 +215,49 @@ def search_cvs(keywords: list[str], algorithm: str, top_n: int):
         'failed_files': failed_files
     }
 
+# def get_applicant_summary(applicant_id: int, cv_path: str):
+#     """
+#     Mengambil profil dari DB dan mengekstrak info dari CV untuk halaman ringkasan.
+#     Fungsi ini sekarang menerima cv_path secara langsung untuk memastikan konsistensi.
+#     """
+#     db_manager = _get_db_manager()
+#     conn = db_manager.get_connection()
+#     cursor = conn.cursor(buffered=True, dictionary=True)
+    
+#     # Query sekarang hanya untuk mengambil data profil, bukan path lagi
+#     cursor.execute("SELECT * FROM ApplicantProfile WHERE applicant_id = %s", (applicant_id,))
+#     profile_data = cursor.fetchone()
+
+#     if not profile_data:
+#         cursor.close()
+#         return None
+
+#     # Gunakan cv_path yang diberikan langsung, tidak lagi dari hasil query
+#     cv_text_for_regex = extract_text_for_regex(cv_path)
+#     if not cv_text_for_regex:
+#         print(f"Gagal memproses file untuk regex: {cv_path}")
+
+#     extracted_sections = extract_all_sections(cv_text_for_regex)
+
+#     summary_data = {
+#         'profile': profile_data,
+#         'summary': extracted_sections.get('summary', 'Tidak ditemukan ringkasan.'),
+#         'skills': extracted_sections.get('skills', 'Tidak ditemukan keahlian.'),
+#         'experience': extracted_sections.get('experience', 'Tidak ditemukan pengalaman kerja.'),
+#         'education': extracted_sections.get('education', 'Tidak ditemukan riwayat pendidikan.')
+#     }
+    
+#     cursor.close()
+#     return summary_data
+
 def get_applicant_summary(applicant_id: int, cv_path: str):
     """
-    Mengambil profil dari DB dan mengekstrak info dari CV untuk halaman ringkasan.
-    Fungsi ini sekarang menerima cv_path secara langsung untuk memastikan konsistensi.
+    Versi ini disesuaikan untuk bekerja dengan regex_extractor yang baru.
     """
     db_manager = _get_db_manager()
     conn = db_manager.get_connection()
     cursor = conn.cursor(buffered=True, dictionary=True)
     
-    # Query sekarang hanya untuk mengambil data profil, bukan path lagi
     cursor.execute("SELECT * FROM ApplicantProfile WHERE applicant_id = %s", (applicant_id,))
     profile_data = cursor.fetchone()
 
@@ -231,19 +265,19 @@ def get_applicant_summary(applicant_id: int, cv_path: str):
         cursor.close()
         return None
 
-    # Gunakan cv_path yang diberikan langsung, tidak lagi dari hasil query
+    # Teks mentah dari PDF diambil di sini
     cv_text_for_regex = extract_text_for_regex(cv_path)
-    if not cv_text_for_regex:
-        print(f"Gagal memproses file untuk regex: {cv_path}")
-
+    
+    # Panggil fungsi ekstraksi utama SATU KALI saja untuk mendapatkan semua seksi
     extracted_sections = extract_all_sections(cv_text_for_regex)
 
+    # Ambil hasilnya dari dictionary yang sudah jadi
     summary_data = {
         'profile': profile_data,
-        'summary': extracted_sections.get('summary', 'Tidak ditemukan ringkasan.'),
-        'skills': extracted_sections.get('skills', 'Tidak ditemukan keahlian.'),
-        'experience': extracted_sections.get('experience', 'Tidak ditemukan pengalaman kerja.'),
-        'education': extracted_sections.get('education', 'Tidak ditemukan riwayat pendidikan.')
+        'summary': extracted_sections.get('summary', 'Tidak dapat menemukan bagian Summary.'),
+        'skills': extracted_sections.get('skills', 'Tidak dapat menemukan bagian Skills.'),
+        'experience': extracted_sections.get('experience', "Tidak dapat menemukan bagian Experience."),
+        'education': extracted_sections.get('education', "Tidak dapat menemukan bagian Education.")
     }
     
     cursor.close()
