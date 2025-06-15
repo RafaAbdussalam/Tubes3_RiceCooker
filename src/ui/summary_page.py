@@ -1,38 +1,109 @@
 import re  # Added import for regular expressions
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTextEdit
-from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTextEdit, QScrollArea
+from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt
 from core.pdf_parser import extract_text_for_regex
 from core.regex_extractor import extract_all_sections
+from datetime import date
 
 class SummaryWindow(QWidget):
     """Widget for displaying the CV summary page."""
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #f5f5f5;
+            }
+            QLabel {
+                color: #333333;
+            }
+            QTextEdit {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 10px;
+            }
+            QTextEdit:focus {
+                border: 2px solid #4CAF50;
+            }
+        """)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
 
-        # Title
+        # Title dengan frame
+        title_frame = QFrame()
+        title_frame.setStyleSheet("""
+            QFrame {
+                background-color: #4CAF50;
+                border-radius: 10px;
+                padding: 15px;
+            }
+        """)
+        title_layout = QVBoxLayout(title_frame)
+        
         title_label = QLabel("CV Summary")
-        title_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title_label.setFont(QFont("Segoe UI", 24, QFont.Bold))
+        title_label.setStyleSheet("color: white;")
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
+        title_layout.addWidget(title_label)
+        layout.addWidget(title_frame)
 
-        # Container for candidate information
+        # Scroll area untuk konten
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #f0f0f0;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c0c0c0;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+
+        # Container untuk candidate information
         self.info_container = QWidget()
         self.info_layout = QVBoxLayout(self.info_container)
-        layout.addWidget(self.info_container)
+        self.info_layout.setSpacing(20)
+        scroll_area.setWidget(self.info_container)
+        layout.addWidget(scroll_area)
 
-        # Back button
+        # Back button dengan style yang lebih baik
         back_button = QPushButton("Back to Search")
-        back_button.setStyleSheet("background-color: #757575; color: white; padding: 5px; border-radius: 5px;")
+        back_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        back_button.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #757575, stop:1 #616161);
+                color: white;
+                padding: 12px;
+                border-radius: 8px;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #9E9E9E, stop:1 #757575);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #616161, stop:1 #424242);
+            }
+        """)
         back_button.clicked.connect(self.controller.switch_to_search)
         layout.addWidget(back_button)
-
-    # Di dalam kelas SummaryWindow di file ui/summary_page.py
 
     def update_candidate_info(self, summary_data: dict):
         """
@@ -54,6 +125,10 @@ class SummaryWindow(QWidget):
         address = profile.get('address', 'N/A')
         phone = profile.get('phone_number', 'N/A')
         
+        # Konversi birthdate ke string jika berupa datetime.date
+        if isinstance(birthdate, date):
+            birthdate = birthdate.strftime('%d %B %Y')
+        
         # Ambil data yang diekstrak dari CV oleh backend
         skills_text = summary_data.get('skills', 'Tidak ditemukan').strip()
         experience_text = summary_data.get('experience', 'Tidak ditemukan').strip()
@@ -61,63 +136,124 @@ class SummaryWindow(QWidget):
 
         # --- 3. Tampilkan Informasi Pribadi ---
         personal_frame = QFrame()
-        personal_frame.setStyleSheet("background-color: #f0f0f0; border-radius: 5px; padding: 10px;")
+        personal_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 10px;
+                padding: 20px;
+            }
+        """)
         personal_layout = QVBoxLayout(personal_frame)
+        personal_layout.setSpacing(10)
         
         name_label = QLabel(name)
-        name_label.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        name_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
         personal_layout.addWidget(name_label)
         
-        # Tampilkan detail lainnya dari database
-        personal_layout.addWidget(QLabel(f"Birthdate: {birthdate}"))
-        personal_layout.addWidget(QLabel(f"Address: {address}"))
-        personal_layout.addWidget(QLabel(f"Phone: {phone}"))
-        # personal_layout.addWidget(QLabel(f"Skin Color: Black"))
+        # Detail info dengan style yang lebih baik
+        for label, value in [
+            ("Birthdate", birthdate),
+            ("Address", address),
+            ("Phone", phone)
+        ]:
+            info_layout = QHBoxLayout()
+            label_widget = QLabel(f"{label}:")
+            label_widget.setFont(QFont("Segoe UI", 11, QFont.Bold))
+            value_widget = QLabel(str(value))  # Konversi value ke string
+            value_widget.setFont(QFont("Segoe UI", 11))
+            info_layout.addWidget(label_widget)
+            info_layout.addWidget(value_widget)
+            info_layout.addStretch()
+            personal_layout.addLayout(info_layout)
         
         self.info_layout.addWidget(personal_frame)
 
         # --- 4. Tampilkan Keahlian (Skills) ---
         skills_header = QLabel("Skills")
-        skills_header.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        skills_header.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.info_layout.addWidget(skills_header)
 
         skills_frame = QFrame()
-        skills_frame.setStyleSheet("background-color: #f0f0f0; border-radius: 5px; padding: 10px;")
+        skills_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 10px;
+                padding: 20px;
+            }
+        """)
         skills_layout = QHBoxLayout(skills_frame)
+        skills_layout.setSpacing(10)
         
-        # Pisahkan skill berdasarkan newline dan tampilkan sebagai tag
         if skills_text and skills_text != 'Tidak ditemukan':
             for skill in skills_text.split('\n'):
                 if skill.strip():
                     skill_tag = QPushButton(skill.strip())
-                    skill_tag.setStyleSheet("background-color: #e0e0e0; border-radius: 5px; padding: 5px;")
+                    skill_tag.setFont(QFont("Segoe UI", 10))
+                    skill_tag.setStyleSheet("""
+                        QPushButton {
+                            background-color: #E8F5E9;
+                            color: #2E7D32;
+                            border: 2px solid #C8E6C9;
+                            border-radius: 15px;
+                            padding: 8px 15px;
+                            min-width: 100px;
+                        }
+                        QPushButton:hover {
+                            background-color: #C8E6C9;
+                        }
+                    """)
                     skills_layout.addWidget(skill_tag)
         else:
-            skills_layout.addWidget(QLabel("Tidak ada data keahlian."))
+            no_skills = QLabel("Tidak ada data keahlian.")
+            no_skills.setFont(QFont("Segoe UI", 11))
+            no_skills.setStyleSheet("color: #757575;")
+            skills_layout.addWidget(no_skills)
         skills_layout.addStretch()
         self.info_layout.addWidget(skills_frame)
 
         # --- 5. Tampilkan Pengalaman Kerja (Job History) ---
         exp_header = QLabel("Job History")
-        exp_header.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        exp_header.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.info_layout.addWidget(exp_header)
+        
+        experience_frame = QFrame()
+        experience_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 10px;
+                padding: 20px;
+            }
+        """)
+        experience_layout = QVBoxLayout(experience_frame)
         
         experience_display = QTextEdit(experience_text)
         experience_display.setReadOnly(True)
-        experience_display.setStyleSheet("border: 1px solid #ccc; border-radius: 5px; padding: 5px;")
-        experience_display.setFixedHeight(120)  # Sesuaikan tinggi sesuai kebutuhan
-        self.info_layout.addWidget(experience_display)
+        experience_display.setFont(QFont("Segoe UI", 11))
+        experience_display.setFixedHeight(150)
+        experience_layout.addWidget(experience_display)
+        self.info_layout.addWidget(experience_frame)
 
         # --- 6. Tampilkan Riwayat Pendidikan (Education) ---
         edu_header = QLabel("Education")
-        edu_header.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        edu_header.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.info_layout.addWidget(edu_header)
+        
+        education_frame = QFrame()
+        education_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 10px;
+                padding: 20px;
+            }
+        """)
+        education_layout = QVBoxLayout(education_frame)
         
         education_display = QTextEdit(education_text)
         education_display.setReadOnly(True)
-        education_display.setStyleSheet("border: 1px solid #ccc; border-radius: 5px; padding: 5px;")
-        education_display.setFixedHeight(100) # Sesuaikan tinggi sesuai kebutuhan
-        self.info_layout.addWidget(education_display)
+        education_display.setFont(QFont("Segoe UI", 11))
+        education_display.setFixedHeight(120)
+        education_layout.addWidget(education_display)
+        self.info_layout.addWidget(education_frame)
 
         # Menambahkan sisa ruang kosong di bagian bawah
         self.info_layout.addStretch()
