@@ -251,9 +251,6 @@ def search_cvs(keywords: list[str], algorithm: str, top_n: int):
 #     return summary_data
 
 def get_applicant_summary(applicant_id: int, cv_path: str):
-    """
-    Versi ini disesuaikan untuk bekerja dengan regex_extractor yang baru.
-    """
     db_manager = _get_db_manager()
     conn = db_manager.get_connection()
     cursor = conn.cursor(buffered=True, dictionary=True)

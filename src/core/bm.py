@@ -1,5 +1,3 @@
-# File: src/core/bm.py (Versi Lengkap dengan Good Suffix Heuristic)
-
 def build_bad_char_table(pattern: str) -> dict:
     """Membangun tabel bad character (kemunculan terakhir)."""
     bad_char = {}
