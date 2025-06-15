@@ -8,7 +8,7 @@ from collections import OrderedDict
 SECTION_KEYWORDS = {
     'summary': r'summary|profile|objective|about me|professional summary',
     'skills': r'skills|highlights|technical skills|core competencies|expertise',
-    'experience': r'experience|work experience|employment history|professional experience',
+    'experience': r'experience|work experience|employment history|professional experience|work history',
     'education': r'education|academic background|qualifications',
     'boundary': r'accomplishments|affiliations|interests|certifications|languages'
 }
@@ -95,33 +95,59 @@ def parse_skills(text_blocks: list) -> list:
     
     return unique_skills
 
-
 def parse_experience(text: str) -> list:
-    # Fungsi ini tetap sama
-    if not text: return []
+    """
+    Logika parsing experience definitif yang ditulis ulang berdasarkan struktur CV.
+    """
+    if not text:
+        return []
+
+    # Perbaikan kecil pada teks hasil OCR
+    text = re.sub(r'O\s+fice', 'Office', text, flags=re.IGNORECASE)
+    
+    # 1. Gunakan pola [nomor].\n sebagai pemisah entri yang paling andal
+    # Regex `\s*\d\.\s*\n?` mencari spasi, nomor, titik, lalu newline opsional
+    entries = re.split(r'\s*\d\.\s*\n?', text)
+    
     experiences = []
-    entry_pattern = r'((?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4})\s*[-–to]+\s*(?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4}|Present|Current))'
-    entries = re.split(fr'(?={entry_pattern})', text, flags=re.IGNORECASE)
     for entry_block in entries:
         entry_block = entry_block.strip()
-        if not entry_block: continue
-        lines = entry_block.split('\n')
-        date_range_match = re.match(entry_pattern, lines[0], re.IGNORECASE)
-        date_range = date_range_match.group(1).strip() if date_range_match else "N/A"
-        first_line_content = re.sub(entry_pattern, '', lines[0], count=1, flags=re.IGNORECASE).strip()
-        position, company, description = "N/A", "N/A", ""
-        remaining_lines = [first_line_content] + lines[1:] if first_line_content else lines[1:]
-        content_lines = [line.strip() for line in remaining_lines if line.strip()]
-        if not content_lines: continue
-        position = content_lines[0]
-        if len(content_lines) > 1:
-            company = content_lines[1]
-            description = '\n'.join(content_lines[2:]).strip()
-        else:
-            description = ""
-        if position != "N/A" or company != "N/A":
-            experiences.append({'date_range': date_range, 'position': position, 'company': company, 'description': description})
+        if not entry_block:
+            continue
+
+        date_pattern = r'(\d{2}/\d{4}\s*to\s*\d{2}/\d{4})'
+        position, company, date_range, description = "N/A", "N/A", "N/A", ""
+        
+        description_lines = []
+        found_main_line = False
+
+        # 2. Proses setiap baris di dalam blok untuk menemukan "baris utama" (yang berisi tanggal)
+        for line in entry_block.split('\n'):
+            line = line.strip()
+            if not line: continue
+            
+            date_match = re.search(date_pattern, line)
+            
+            if date_match and not found_main_line:
+                date_range = date_match.group(1).strip()
+                position = line[:date_match.start()].strip()
+                company = line[date_match.end():].strip()
+                found_main_line = True
+            else:
+                description_lines.append(line)
+        
+        description = '\n'.join(description_lines).strip()
+        
+        if date_range != "N/A":
+             experiences.append({
+                'date_range': date_range,
+                'position': position,
+                'company': company,
+                'description': description
+            })
+
     return experiences
+
 
 def parse_education(text: str) -> list:
     """
@@ -202,6 +228,6 @@ def extract_all_sections(text: str) -> dict:
     return {
         'summary': clean_text(summary_text).replace("\n", " ") or 'N/A',
         'skills': skills_list or 'N/A', # Sekarang mengembalikan list
-        'work_experience': experience_list or [],
+        'experience': experience_list or [],
         'education': education_list or []
     }

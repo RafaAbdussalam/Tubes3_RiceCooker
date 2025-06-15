@@ -140,7 +140,8 @@ class SummaryWindow(QWidget):
         if not isinstance(skills_list, list):
             skills_list = []
             
-        experience_list = summary_data.get('work_experience', [])
+        # Ubah dari work_experience menjadi experience
+        experience_list = summary_data.get('experience', [])
         education_list = summary_data.get('education', [])
         
         # --- Tampilkan Informasi Pribadi (Kode tetap sama) ---
@@ -210,59 +211,33 @@ class SummaryWindow(QWidget):
         self.info_layout.addWidget(skills_frame)
 
         # --- 5. Tampilkan Pengalaman Kerja (Job History) ---
+        # Tampilkan Pengalaman Kerja
         exp_header = QLabel("Job History")
         exp_header.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.info_layout.addWidget(exp_header)
-        
-        experience_frame = QFrame()
-        experience_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 10px;
-                padding: 20px;
-            }
-        """)
-        experience_layout = QVBoxLayout(experience_frame)
-        
-        # Buat QTextEdit dengan styling yang lebih baik
-        experience_display = QTextEdit()
-        experience_display.setReadOnly(True)
-        experience_display.setFont(QFont("Segoe UI", 11))
-        experience_display.setStyleSheet("""
-            QTextEdit {
-                background-color: white;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 15px;
-                line-height: 1.6;
-            }
-        """)
-        
-        # Format teks experience
         if experience_list:
-            formatted_text = ""
             for exp in experience_list:
-                formatted_text += f"""
-                <div style='margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;'>
-                    <p style='font-size: 14px; font-weight: bold; color: #2E7D32; margin: 0;'>{exp.get('position', 'N/A')}</p>
-                    <p style="font-size: 12px; color: #666; margin: 3px 0;">{exp.get('company', 'N/A')}</p>
-                    <p style="font-size: 12px; color: #666; margin: 3px 0;">{exp.get('date_range', 'N/A')}</p>
-                    <div style='margin-left: 20px; color: #333;'>
-                        {exp.get('description', '').replace('•', '<br>•')}
-                    </div>
-                </div>
-                """
-            experience_display.setHtml(formatted_text)
+                exp_frame = QFrame()
+                exp_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #eee; padding: 15px;")
+                exp_layout = QVBoxLayout(exp_frame)
+                
+                pos_label = QLabel(exp.get('position', 'N/A'))
+                pos_label.setFont(QFont("Segoe UI", 12, QFont.Bold))
+                pos_label.setStyleSheet("color: #2E7D32;")
+                
+                comp_date_text = f"{exp.get('company', 'N/A')} | {exp.get('date_range', 'N/A')}"
+                comp_date_label = QLabel(comp_date_text)
+                comp_date_label.setStyleSheet("color: #666; margin-bottom: 10px;")
+                
+                desc_label = QLabel(exp.get('description', '').replace('\n', '<br>'))
+                desc_label.setWordWrap(True)
+                
+                exp_layout.addWidget(pos_label)
+                exp_layout.addWidget(comp_date_label)
+                exp_layout.addWidget(desc_label)
+                self.info_layout.addWidget(exp_frame)
         else:
-            experience_display.setText("Tidak ada data pengalaman kerja.")
-        
-        # Set tinggi minimum dan maksimum
-        experience_display.setMinimumHeight(300)
-        experience_display.setMaximumHeight(500)
-        
-        experience_layout.addWidget(experience_display)
-        self.info_layout.addWidget(experience_frame)
-
+            self.info_layout.addWidget(QLabel("Tidak ada data pengalaman kerja."))
         # --- 6. Tampilkan Riwayat Pendidikan (Education) ---
         edu_header = QLabel("Education")
         edu_header.setFont(QFont("Segoe UI", 14, QFont.Bold))
