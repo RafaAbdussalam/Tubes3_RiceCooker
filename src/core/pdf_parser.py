@@ -78,11 +78,10 @@ def extract_text_for_pattern_matching(pdf_path: str) -> str:
         logger.error(f"Error dalam extract_text_for_pattern_matching untuk {pdf_path}: {str(e)}")
         return ""
 
-# --- Untuk pengujian mandiri ---
-# Kode ini akan meniru proses pembuatan file .txt seperti pada contoh spesifikasi
+
 # if __name__ == '__main__':
 #     # Ganti dengan path CV yang valid dari folder data Anda
-#     sample_cv_path = 'data/10276858.pdf' 
+#     sample_cv_path = 'data/ACCOUNTANT/10554236.pdf' 
 
 #     # --- Proses untuk Regex ---
 #     print(f"Mengekstrak teks dari {sample_cv_path} untuk Regex...")

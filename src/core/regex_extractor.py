@@ -1,9 +1,10 @@
-# File: src/core/regex_extractor.py (Versi Baru yang Andal)
+# File: src/core/regex_extractor.py (Versi Optimisasi Final)
 
 import re
 from collections import OrderedDict
 
-# Kamus kata kunci yang komprehensif untuk mendeteksi berbagai judul seksi.
+# Kamus kata kunci yang komprehensif, termasuk sinonim penting.
+# 'additional information' ditambahkan untuk menangani kasus CV Akuntan.
 SECTION_KEYWORDS = {
     'summary': r'summary|objective|profile|about me|professional profile',
     'skills': r'skills|technical skills|proficiencies|technologies|qualifications|additional information',
@@ -17,18 +18,29 @@ def _parse_skills_from_block(content: str) -> str:
     if not content:
         return ""
     
-    # 1. Normalisasi semua jenis pemisah (baris baru, titik koma, bullet) menjadi '|'.
+    # 1. Ganti semua pemisah umum (baris baru, titik koma, bullet) menjadi pemisah tunggal '|'.
     normalized_str = re.sub(r'\s*[\n;*•●]\s*', '|', content)
-    # 2. Ganti spasi ganda atau lebih (untuk skill dalam satu baris) menjadi '|'.
+    # 2. Ganti spasi ganda atau lebih (untuk skill dalam satu baris) menjadi '|'. Ini penting untuk CV Akuntan.
     normalized_str = re.sub(r'\s{2,}', '|', normalized_str)
     
-    # 3. Pisahkan, bersihkan, dan buang item kosong/terlalu pendek.
+    # 3. Pisahkan menjadi list, bersihkan spasi, dan buang item yang terlalu pendek/kosong.
     skills_list = [skill.strip(' .,') for skill in normalized_str.split('|') if len(skill.strip()) > 2]
     
     # 4. Hilangkan duplikat sambil menjaga urutan.
     unique_skills = list(OrderedDict.fromkeys(skills_list))
     
+    # 5. Kembalikan sebagai satu string yang dipisahkan oleh baris baru ('\n') untuk UI.
     return '\n'.join(unique_skills)
+
+def _clean_paragraph_section(content: str) -> str:
+    """Fungsi pembersih umum untuk seksi berbasis paragraf seperti Experience atau Education."""
+    if not content:
+        return ""
+    # Hapus bullet points di awal setiap baris
+    cleaned = re.sub(r'^\s*[•*-]\s*', '', content, flags=re.MULTILINE)
+    # Ganti spasi/newline ganda atau lebih dengan satu spasi
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
 
 def extract_all_sections(text: str) -> dict:
     """
@@ -70,16 +82,17 @@ def extract_all_sections(text: str) -> dict:
         content_end = title_matches[i+1]['start'] if i + 1 < len(title_matches) else len(text)
         content = text[content_start:content_end].strip()
         
-        # Gabungkan konten jika nama seksi sama (misal, 'skills' dari 'qualifications').
+        # Gabungkan konten jika nama seksi sama (misal, 'skills' dari 'additional information').
         raw_sections[section['name']] = raw_sections.get(section['name'], "") + "\n" + content
 
     # 3. Lakukan pembersihan dan parsing akhir untuk setiap seksi.
     skills_content_to_parse = []
+    
     for name, content in raw_sections.items():
         if name in ['skills', 'accomplishments']:
             skills_content_to_parse.append(content)
         elif name in final_sections:
-            final_sections[name] = re.sub(r'\s+', ' ', content).strip() # Pembersihan dasar untuk paragraf
+            final_sections[name] = _clean_paragraph_section(content)
 
     # Parsing khusus untuk gabungan semua skills.
     if skills_content_to_parse:

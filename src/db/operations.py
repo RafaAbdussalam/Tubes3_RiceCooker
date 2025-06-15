@@ -265,19 +265,18 @@ def get_applicant_summary(applicant_id: int, cv_path: str):
         cursor.close()
         return None
 
-    # Teks mentah dari PDF diambil di sini
     cv_text_for_regex = extract_text_for_regex(cv_path)
     
-    # Panggil fungsi ekstraksi utama SATU KALI saja untuk mendapatkan semua seksi
+    # Panggil fungsi ekstraksi utama SATU KALI saja
     extracted_sections = extract_all_sections(cv_text_for_regex)
 
     # Ambil hasilnya dari dictionary yang sudah jadi
     summary_data = {
         'profile': profile_data,
-        'summary': extracted_sections.get('summary', 'Tidak dapat menemukan bagian Summary.'),
-        'skills': extracted_sections.get('skills', 'Tidak dapat menemukan bagian Skills.'),
-        'experience': extracted_sections.get('experience', "Tidak dapat menemukan bagian Experience."),
-        'education': extracted_sections.get('education', "Tidak dapat menemukan bagian Education.")
+        'summary': extracted_sections.get('summary'),
+        'skills': extracted_sections.get('skills'),
+        'experience': extracted_sections.get('experience'),
+        'education': extracted_sections.get('education')
     }
     
     cursor.close()
