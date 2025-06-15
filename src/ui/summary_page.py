@@ -1,5 +1,5 @@
 import re  # Added import for regular expressions
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTextEdit, QScrollArea
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTextEdit, QScrollArea, QSizePolicy
 from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt
 from core.pdf_parser import extract_text_for_regex
@@ -181,10 +181,16 @@ class SummaryWindow(QWidget):
                 padding: 20px;
             }
         """)
-        skills_layout = QHBoxLayout(skills_frame)
+        skills_layout = QVBoxLayout(skills_frame)
         skills_layout.setSpacing(10)
         
         if skills_text and skills_text != 'Tidak ditemukan':
+            # Buat grid layout untuk skills
+            current_row = QHBoxLayout()
+            current_row.setSpacing(10)
+            row_width = 0
+            max_width = 800  # Maksimum lebar yang diizinkan
+            
             for skill in skills_text.split('\n'):
                 if skill.strip():
                     skill_tag = QPushButton(skill.strip())
@@ -196,19 +202,40 @@ class SummaryWindow(QWidget):
                             border: 2px solid #C8E6C9;
                             border-radius: 15px;
                             padding: 8px 15px;
-                            min-width: 100px;
+                            text-align: left;
                         }
                         QPushButton:hover {
                             background-color: #C8E6C9;
                         }
                     """)
-                    skills_layout.addWidget(skill_tag)
+                    
+                    # Hitung lebar minimum yang dibutuhkan
+                    skill_tag.setMinimumWidth(100)
+                    skill_tag.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+                    
+                    # Tambahkan ke row saat ini
+                    current_row.addWidget(skill_tag)
+                    row_width += skill_tag.sizeHint().width()
+                    
+                    # Jika row sudah penuh, tambahkan ke layout utama dan buat row baru
+                    if row_width >= max_width:
+                        skills_layout.addLayout(current_row)
+                        current_row = QHBoxLayout()
+                        current_row.setSpacing(10)
+                        row_width = 0
+            
+            # Tambahkan row terakhir jika masih ada isinya
+            if current_row.count() > 0:
+                skills_layout.addLayout(current_row)
+                
+            # Tambahkan stretch di akhir untuk memastikan alignment yang benar
+            skills_layout.addStretch()
         else:
             no_skills = QLabel("Tidak ada data keahlian.")
             no_skills.setFont(QFont("Segoe UI", 11))
             no_skills.setStyleSheet("color: #757575;")
             skills_layout.addWidget(no_skills)
-        skills_layout.addStretch()
+        
         self.info_layout.addWidget(skills_frame)
 
         # --- 5. Tampilkan Pengalaman Kerja (Job History) ---

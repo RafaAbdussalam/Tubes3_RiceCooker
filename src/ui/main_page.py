@@ -274,17 +274,19 @@ class CVAnalyzerApp(QMainWindow):
 
     def view_cv(self, cv_path):
         """Membuka file CV menggunakan penampil default sistem."""
-        # Path dari DB sudah benar ('data/CATEGORY/file.pdf').
-        # Kita hanya perlu membuat path ini absolut dari root project.
         try:
-            # Menggunakan os.path.abspath untuk mendapatkan path lengkap yang pasti benar
-            # Ini akan mengubah "../data/..." menjadi "C:\Tubes3_RiceCooker\data\..."
-            absolute_path = os.path.abspath(os.path.join("..", cv_path))
+            # Dapatkan path absolut dari root project
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            # Gabungkan dengan path relatif dari database
+            absolute_path = os.path.join(project_root, cv_path)
             
             if os.path.exists(absolute_path):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(absolute_path))
             else:
-                QMessageBox.warning(self, "File Tidak Ditemukan", f"File CV tidak dapat ditemukan di:\n{absolute_path}")
+                QMessageBox.warning(self, "File Tidak Ditemukan", 
+                    f"File CV tidak dapat ditemukan di:\n{absolute_path}\n\n"
+                    f"Path relatif: {cv_path}\n"
+                    f"Root project: {project_root}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Gagal membuka file CV: {e}")
 
