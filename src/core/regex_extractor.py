@@ -1,176 +1,150 @@
-# File: src/core/regex_extractor.py (Dengan Perbaikan Logika Experience)
+# File: src/core/regex_extractor.py
 
 import re
 from collections import OrderedDict
 
-# Kamus kata kunci yang komprehensif untuk mendeteksi berbagai judul seksi.
+# Definisi section keywords tetap sama
 SECTION_KEYWORDS = {
-    'summary': r'summary|objective|profile|about me|professional profile',
-    'skills': r'skills|technical skills|proficiencies|technologies|qualifications|additional information',
-    'experience': r'experience|work history|employment history|professional experience',
-    'education': r'education|education and training|academic background|academic qualifications',
-    'accomplishments': r'accomplishments|highlights|awards|certifications|professional recognition'
+    'summary': r'summary|objective|profile|about me|professional summary',
+    'experience': r'experience|work history|employment history|professional experience|work experience',
+    'education': r'education|academic background|education and training',
+    'skills': r'skills|highlights|qualifications|technical skills|proficiencies|technologies',
+    'accomplishments': r'accomplishments|awards|professional recognition',
+    'boundary': r'affiliations|interests|certifications'
 }
 
-def _parse_skills_from_block(content: str) -> str:
-    """Fungsi internal untuk secara spesifik mem-parsing blok teks skills menjadi daftar yang rapi."""
-    if not content:
+def _clean_text_block(text: str) -> str:
+    """General utility to clean a block of text by normalizing whitespace."""
+    if not text:
         return ""
-    normalized_str = re.sub(r'\s*[\n;*•●]\s*', '|', content)
-    normalized_str = re.sub(r'\s{2,}', '|', normalized_str)
-    skills_list = [skill.strip(' .,') for skill in normalized_str.split('|') if len(skill.strip()) > 2]
-    unique_skills = list(OrderedDict.fromkeys(skills_list))
+    cleaned_text = re.sub(r'\s+', ' ', text)
+    return cleaned_text.strip()
+
+def _parse_skills_section_final(text: str) -> str:
+    """
+    Final version of the skills parser with intelligent handling of parentheses.
+    It protects parenthetical blocks from being split by commas.
+    """
+    if not text:
+        return ""
+
+    all_skills = []
+    lines = text.strip().split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check for the "Category: description" format
+        category_match = re.match(r'^([\w\s-]+):\s*(.*)', line)
+        if category_match:
+            category, description = category_match.groups()
+            all_skills.append(category.strip())
+            
+            # --- START: PERBAIKAN LOGIKA TANDA KURUNG ---
+            
+            # 1. Simpan semua blok dalam tanda kurung dan ganti dengan placeholder
+            paren_blocks = re.findall(r'\(.*?\)', description)
+            # Ganti blok dalam kurung dengan placeholder unik
+            for i, block in enumerate(paren_blocks):
+                description = description.replace(block, f'__PAREN_BLOCK_{i}__', 1)
+
+            # 2. Sekarang aman untuk memisahkan berdasarkan koma
+            # Split by comma or 'and'
+            sub_skills_split = re.split(r',\s*|\s+and\s+', description)
+            
+            # 3. Gabungkan kembali placeholder dengan isinya
+            restored_skills = []
+            for skill_part in sub_skills_split:
+                # Kembalikan blok tanda kurung ke tempatnya
+                for i, block in enumerate(paren_blocks):
+                    skill_part = skill_part.replace(f'__PAREN_BLOCK_{i}__', block)
+                restored_skills.append(skill_part.strip())
+
+            all_skills.extend([s for s in restored_skills if s])
+            # --- END: PERBAIKAN LOGIKA TANDA KURUNG ---
+
+        else:
+            # Handle simple lists (comma-separated or bulleted)
+            line = re.sub(r'[*•●;]', ',', line)
+            sub_skills = line.split(',')
+            all_skills.extend([skill.strip() for skill in sub_skills if skill.strip()])
+
+    # Clean up the final list
+    cleaned_skills = [skill.strip(' .,') for skill in all_skills if len(skill.strip(' .,')) > 1]
+    unique_skills = list(OrderedDict.fromkeys(cleaned_skills))
+    
     return '\n'.join(unique_skills)
 
-def _clean_paragraph_section(content: str) -> str:
-    """Fungsi pembersih umum untuk seksi berbasis paragraf seperti Experience atau Education."""
-    if not content:
-        return ""
-    cleaned = re.sub(r'^\s*[•*-]\s*', '', content, flags=re.MULTILINE)
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-    return cleaned
-
-def _format_job_history(content: str) -> str:
-    """Fungsi untuk memformat job history menjadi format yang lebih terstruktur."""
-    if not content:
+def _format_structured_section(text: str) -> str:
+    """Formats 'Experience' or 'Education' sections by separating distinct entries with double newlines."""
+    if not text:
         return ""
     
-    # Pisahkan setiap entri pekerjaan berdasarkan nomor atau tanggal
-    entries = re.split(r'(?:\d+\.\s*|\d{4}\s*\n)', content)
-    formatted_entries = []
+    entry_start_pattern = re.compile(
+        r'^\s*(\d+\.\s*|'
+        r'[A-Za-z]+\s+\d{4}\s+to\s+[A-Za-z]+\s+\d{4}|'
+        r'\d{2}/\d{4}\s+to\s+\d{2}/\d{4}|'
+        r'Associate|Bachelor|Master|High School Diploma)',
+        re.IGNORECASE
+    )
+    text_with_separators = entry_start_pattern.sub(r'<<ENTRY_BREAK>>\1', text)
+    entries = text_with_separators.split('<<ENTRY_BREAK>>')
+    cleaned_entries = [re.sub(r'\s+', ' ', entry.strip()) for entry in entries if entry.strip()]
     
-    for entry in entries:
-        if not entry.strip():
-            continue
-            
-        # Coba ekstrak tanggal dengan pattern yang lebih komprehensif
-        date_pattern = r'(?:\d{2}/\d{4}\s*to\s*\d{2}/\d{4}|\d{4})'
-        dates = re.findall(date_pattern, entry)
-        
-        # Pisahkan judul dan deskripsi
-        lines = [line.strip() for line in entry.split('\n') if line.strip()]
-        if not lines:
-            continue
-            
-        # Ekstrak judul (biasanya baris pertama)
-        title = lines[0]
-        
-        # Ekstrak lokasi/company (biasanya baris kedua)
-        location = ""
-        if len(lines) > 1 and not re.search(date_pattern, lines[1]):
-            location = lines[1]
-            
-        # Gabungkan sisa baris sebagai deskripsi
-        description = '\n'.join(lines[2:]) if len(lines) > 2 else ""
-        
-        # Format entri
-        formatted_entry = f"{title}\n"
-        if location:
-            formatted_entry += f"{location}\n"
-        if dates:
-            formatted_entry += f"{dates[0]}\n"
-        if description:
-            formatted_entry += f"{description}\n"
-        
-        formatted_entries.append(formatted_entry)
-    
-    return '\n\n'.join(formatted_entries)
-
-def _format_education(content: str) -> str:
-    """Fungsi untuk memformat education menjadi format yang lebih terstruktur."""
-    if not content:
-        return ""
-    
-    # Pisahkan setiap entri pendidikan berdasarkan tahun atau gelar
-    entries = re.split(r'(?:\d{4}\s*\n|Bachelor|Master|Doctor|High School)', content)
-    formatted_entries = []
-    
-    for entry in entries:
-        if not entry.strip():
-            continue
-            
-        # Coba ekstrak tanggal dengan pattern yang lebih komprehensif
-        date_pattern = r'(?:\d{4})'
-        dates = re.findall(date_pattern, entry)
-        
-        # Pisahkan judul dan deskripsi
-        lines = [line.strip() for line in entry.split('\n') if line.strip()]
-        if not lines:
-            continue
-            
-        # Ekstrak judul (biasanya baris pertama)
-        title = lines[0]
-        
-        # Ekstrak institusi (biasanya baris kedua)
-        institution = ""
-        if len(lines) > 1 and not re.search(date_pattern, lines[1]):
-            institution = lines[1]
-            
-        # Gabungkan sisa baris sebagai deskripsi
-        description = '\n'.join(lines[2:]) if len(lines) > 2 else ""
-        
-        # Format entri
-        formatted_entry = f"{title}\n"
-        if institution:
-            formatted_entry += f"{institution}\n"
-        if dates:
-            formatted_entry += f"{dates[0]}\n"
-        if description:
-            formatted_entry += f"{description}\n"
-        
-        formatted_entries.append(formatted_entry)
-    
-    return '\n\n'.join(formatted_entries)
+    return '\n\n'.join(cleaned_entries)
 
 def extract_all_sections(text: str) -> dict:
-    """
-    Fungsi utama yang dipanggil dari luar. Mengekstrak semua seksi dari teks CV.
-    """
+    """Main function to extract all key sections from a CV's text content."""
     final_sections = {
-        'summary': 'Tidak dapat menemukan bagian Summary.',
-        'skills': 'Tidak dapat menemukan bagian Skills.',
-        'experience': 'Tidak dapat menemukan bagian Experience.',
-        'education': 'Tidak dapat menemukan bagian Education.'
+        'summary': 'Summary section not found.',
+        'skills': 'Skills section not found.',
+        'experience': 'Experience section not found.',
+        'education': 'Education section not found.'
     }
+
     if not text or not isinstance(text, str):
         return final_sections
         
-    text = text.replace('ï¼', ':').replace('â€', '').replace('Â', '')
+    text = text.replace('ï¼', ':').replace('â€', '-').replace('Â', '')
 
-    all_kw_pattern = '|'.join(v for v in SECTION_KEYWORDS.values())
-    title_pattern = re.compile(fr'^\s*({all_kw_pattern})\b\s*:?', re.IGNORECASE | re.MULTILINE)
+    all_keywords_pattern = '|'.join(val for val in SECTION_KEYWORDS.values())
+    title_pattern = re.compile(fr'^\s*({all_keywords_pattern})\b\s*:?', re.IGNORECASE | re.MULTILINE)
 
-    title_matches = []
+    matches = []
     for match in title_pattern.finditer(text):
-        title_str = match.group(1).lower()
-        for name, pattern in SECTION_KEYWORDS.items():
-            if re.fullmatch(pattern, title_str, re.IGNORECASE):
-                title_matches.append({'name': name, 'start': match.start(), 'end': match.end()})
+        title_text = match.group(1).lower()
+        for section_name, pattern in SECTION_KEYWORDS.items():
+            if re.fullmatch(pattern, title_text, re.IGNORECASE):
+                matches.append({'name': section_name, 'start': match.start(), 'end': match.end()})
                 break
     
-    if not title_matches:
+    if not matches:
         return final_sections
 
-    raw_sections = OrderedDict()
-    for i, section in enumerate(title_matches):
-        content_start = section['end']
-        content_end = title_matches[i+1]['start'] if i + 1 < len(title_matches) else len(text)
+    raw_sections = {name: [] for name in SECTION_KEYWORDS.keys()}
+    for i, match in enumerate(matches):
+        section_name = match['name']
+        content_start = match['end']
+        content_end = matches[i + 1]['start'] if i + 1 < len(matches) else len(text)
+        
         content = text[content_start:content_end].strip()
-        raw_sections[section['name']] = raw_sections.get(section['name'], "") + "\n" + content
+        if content and section_name != 'boundary':
+            raw_sections[section_name].append(content)
 
-    # --- PERBAIKAN LOGIKA UTAMA ADA DI SINI ---
-    skills_content_to_parse = []
-    for name, content in raw_sections.items():
-        if name in ['skills', 'accomplishments']:
-            skills_content_to_parse.append(content)
-        elif name == 'experience':
-            final_sections[name] = _format_job_history(content)
-        elif name == 'education':
-            final_sections[name] = _format_education(content)
-        elif name == 'summary':
-            final_sections[name] = _clean_paragraph_section(content)
+    if raw_sections['summary']:
+        final_sections['summary'] = _clean_text_block('\n'.join(raw_sections['summary']))
+        
+    if raw_sections['skills'] or raw_sections['accomplishments']:
+        full_skills_text = '\n'.join(raw_sections.get('skills', [])) + '\n' + '\n'.join(raw_sections.get('accomplishments', []))
+        # Menggunakan fungsi parser yang sudah final
+        final_sections['skills'] = _parse_skills_section_final(full_skills_text)
+        
+    if raw_sections['experience']:
+        final_sections['experience'] = _format_structured_section('\n'.join(raw_sections['experience']))
 
-    if skills_content_to_parse:
-        final_sections['skills'] = _parse_skills_from_block('\n'.join(skills_content_to_parse))
-    
+    if raw_sections['education']:
+        final_sections['education'] = _format_structured_section('\n'.join(raw_sections['education']))
+            
     return final_sections
