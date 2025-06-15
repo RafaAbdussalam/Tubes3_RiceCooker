@@ -1,5 +1,5 @@
 # File: src/core/regex_extractor.py
-# Perbaikan: Mengganti nama fungsi utama menjadi extract_all_sections untuk mengatasi ImportError.
+# Perbaikan: Logika penggabungan seksi dan parser skills yang lebih cerdas.
 
 import re
 from collections import OrderedDict
@@ -28,41 +28,83 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 def extract_raw_sections(text: str) -> dict:
-    """Mengekstrak blok teks mentah untuk setiap seksi berdasarkan keywords."""
+    """
+    Mengekstrak blok teks mentah.
+    PERBAIKAN: Sekarang menggunakan list untuk mengakomodasi beberapa seksi dengan nama sama (misal: skills dan highlights).
+    """
     cleaned_text = clean_text(text)
     all_kw_pattern = '|'.join(SECTION_KEYWORDS.values())
     title_pattern = re.compile(fr'^\s*({all_kw_pattern})\b\s*:?', re.IGNORECASE | re.MULTILINE)
     matches = list(title_pattern.finditer(cleaned_text))
+    
     sections = {}
     for i, match in enumerate(matches):
         title_text = match.group(1).lower()
         section_name = next((name for name, pattern in SECTION_KEYWORDS.items() if re.fullmatch(pattern, title_text, re.IGNORECASE)), None)
+        
         if section_name and section_name != 'boundary':
             content_start = match.end()
             content_end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned_text)
-            sections[section_name] = cleaned_text[content_start:content_end].strip()
+            content_block = cleaned_text[content_start:content_end].strip()
+            
+            # Logika baru: Append ke list, jangan overwrite
+            if section_name not in sections:
+                sections[section_name] = []
+            sections[section_name].append(content_block)
+            
     return sections
 
-def parse_skills(text: str) -> list:
-    """Mem-parsing blok teks skills menjadi daftar yang bersih dan unik."""
-    if not text:
+def parse_skills(text_blocks: list) -> list:
+    """
+    Fungsi parser skills dengan logika baru yang lebih andal.
+    Mencoba menggabungkan baris yang terpotong sebelum mem-parsing.
+    """
+    if not text_blocks:
         return []
-    text = re.sub(r'[\n;*•●,]', '|', text)
-    text = re.sub(r'\|+', '|', text)
-    skills = [skill.strip() for skill in text.split('|') if 2 < len(skill.strip()) < 50]
-    return list(OrderedDict.fromkeys(skills))
+
+    full_text = '\n'.join(text_blocks)
+
+    # --- LOGIKA BARU: PRE-PROCESSING UNTUK MENGGABUNGKAN BARIS ---
+    # Ganti newline (\n) dengan spasi, KECUALI jika newline tersebut diikuti
+    # oleh huruf kapital atau bullet point, yang menandakan item baru.
+    # Ini adalah heuristik untuk menggabungkan frasa yang terpotong.
+    # Regex (?![A-Z•*]) adalah negative lookahead.
+    processed_text = re.sub(r'\n(?![A-Z•*-])', ' ', full_text)
+    
+    all_skills = []
+    # Sekarang, pisahkan teks yang sudah lebih bersih berdasarkan baris baru yang tersisa.
+    lines = processed_text.split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Jika baris mengandung ':', anggap sebagai satu item utuh.
+        if ':' in line:
+            # Bersihkan spasi berlebih yang mungkin muncul dari proses join
+            all_skills.append(re.sub(r'\s+', ' ', line).strip())
+        else:
+            # Jika tidak, baru pecah berdasarkan koma.
+            sub_skills = re.split(r',\s*', line)
+            all_skills.extend([skill.strip() for skill in sub_skills if skill.strip()])
+    
+    # Membersihkan dan menghilangkan duplikasi hasil akhir
+    cleaned_skills = [skill.strip(' .,') for skill in all_skills if len(skill.strip(' .,')) > 1]
+    unique_skills = list(OrderedDict.fromkeys(cleaned_skills))
+    
+    return unique_skills
+
 
 def parse_experience(text: str) -> list:
-    """Mem-parsing blok pengalaman kerja dengan metode yang lebih cerdas dan fleksibel."""
-    if not text:
-        return []
+    # Fungsi ini tetap sama
+    if not text: return []
     experiences = []
     entry_pattern = r'((?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4})\s*[-–to]+\s*(?:\d{2}/\d{4}|[A-Za-z]+\s+\d{4}|Present|Current))'
     entries = re.split(fr'(?={entry_pattern})', text, flags=re.IGNORECASE)
     for entry_block in entries:
         entry_block = entry_block.strip()
-        if not entry_block:
-            continue
+        if not entry_block: continue
         lines = entry_block.split('\n')
         date_range_match = re.match(entry_pattern, lines[0], re.IGNORECASE)
         date_range = date_range_match.group(1).strip() if date_range_match else "N/A"
@@ -70,21 +112,19 @@ def parse_experience(text: str) -> list:
         position, company, description = "N/A", "N/A", ""
         remaining_lines = [first_line_content] + lines[1:] if first_line_content else lines[1:]
         content_lines = [line.strip() for line in remaining_lines if line.strip()]
-        if not content_lines:
-            continue
+        if not content_lines: continue
         position = content_lines[0]
         if len(content_lines) > 1:
             company = content_lines[1]
-            description_start_index = 2
+            description = '\n'.join(content_lines[2:]).strip()
         else:
-            description_start_index = 1
-        description = '\n'.join(content_lines[description_start_index:]).strip()
+            description = ""
         if position != "N/A" or company != "N/A":
             experiences.append({'date_range': date_range, 'position': position, 'company': company, 'description': description})
     return experiences
 
 def parse_education(text: str) -> list:
-    """Mem-parsing blok pendidikan dengan metode yang andal."""
+    # Fungsi ini tetap sama seperti sebelumnya
     if not text:
         return []
     entry_pattern = re.compile(r'^\s*(Bachelor|Master|Doctor|Associate|High School Diploma|(?:\b(19|20)\d{2}\b))', re.IGNORECASE | re.MULTILINE)
@@ -111,22 +151,29 @@ def parse_education(text: str) -> list:
             parsed_entries.append(parsed_entry)
     return parsed_entries
 
-# --- PERUBAHAN DI SINI ---
-# Nama fungsi diubah dari 'extract_all_info' menjadi 'extract_all_sections'
 def extract_all_sections(text: str) -> dict:
     """
     Fungsi utama untuk mengekstrak semua informasi dari teks CV.
-    Nama fungsi ini disesuaikan agar bisa diimpor oleh file UI Anda.
+    PERBAIKAN: Cara memanggil parse_skills diubah untuk menangani gabungan seksi.
     """
     sections = extract_raw_sections(text)
-    summary_text = sections.get('summary', '')
-    skills_list = parse_skills(sections.get('skills', ''))
-    experience_list = parse_experience(sections.get('experience', ''))
-    education_list = parse_education(sections.get('education', ''))
+    
+    # PERBAIKAN: Mengambil daftar blok teks dari 'skills'
+    skills_blocks = sections.get('skills', [])
+    skills_list = parse_skills(skills_blocks)
+
+    # Mengambil teks tunggal untuk experience dan education (asumsi hanya ada satu seksi utama)
+    experience_text = '\n'.join(sections.get('experience', []))
+    experience_list = parse_experience(experience_text)
+    
+    education_text = '\n'.join(sections.get('education', []))
+    education_list = parse_education(education_text)
+    
+    summary_text = '\n'.join(sections.get('summary', []))
 
     return {
         'summary': clean_text(summary_text).replace("\n", " ") or 'N/A',
-        'skills': ', '.join(skills_list) if skills_list else 'N/A',
-        'experience': experience_list or [],
+        'skills': skills_list or 'N/A', # Sekarang mengembalikan list
+        'work_experience': experience_list or [],
         'education': education_list or []
     }

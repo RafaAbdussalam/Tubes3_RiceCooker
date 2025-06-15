@@ -134,113 +134,79 @@ class SummaryWindow(QWidget):
         except Exception:
             birthdate = str(birthdate) if birthdate else 'N/A'
         
-        # Ambil data yang diekstrak dari CV oleh backend
-        skills_text = summary_data.get('skills', 'Tidak ditemukan').strip()
-        experience_list = summary_data.get('experience', [])
+        # 1. Ambil 'skills' sebagai list, defaultnya list kosong jika tidak ada.
+        skills_list = summary_data.get('skills', [])
+        # Pastikan skills_list adalah list
+        if not isinstance(skills_list, list):
+            skills_list = []
+            
+        experience_list = summary_data.get('work_experience', [])
         education_list = summary_data.get('education', [])
-
-        # --- 3. Tampilkan Informasi Pribadi ---
-        personal_frame = QFrame()
-        personal_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 10px;
-                padding: 20px;
-            }
-        """)
-        personal_layout = QVBoxLayout(personal_frame)
-        personal_layout.setSpacing(10)
         
+        # --- Tampilkan Informasi Pribadi (Kode tetap sama) ---
+        personal_frame = QFrame()
+        personal_frame.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
+        personal_layout = QVBoxLayout(personal_frame)
         name_label = QLabel(name)
         name_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
         personal_layout.addWidget(name_label)
-        
-        # Detail info dengan style yang lebih baik
-        for label, value in [
-            ("Birthdate", birthdate),
-            ("Address", address),
-            ("Phone", phone)
-        ]:
+        for label, value in [("Birthdate", birthdate), ("Address", address), ("Phone", phone)]:
             info_layout = QHBoxLayout()
             label_widget = QLabel(f"{label}:")
             label_widget.setFont(QFont("Segoe UI", 11, QFont.Bold))
-            value_widget = QLabel(str(value))  # Konversi value ke string
+            value_widget = QLabel(str(value))
             value_widget.setFont(QFont("Segoe UI", 11))
             info_layout.addWidget(label_widget)
             info_layout.addWidget(value_widget)
             info_layout.addStretch()
             personal_layout.addLayout(info_layout)
-        
         self.info_layout.addWidget(personal_frame)
-
-        # --- 4. Tampilkan Keahlian (Skills) ---
+        
+        # --- Tampilkan Keahlian (Skills) ---
         skills_header = QLabel("Skills")
         skills_header.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.info_layout.addWidget(skills_header)
-
         skills_frame = QFrame()
-        skills_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 10px;
-                padding: 20px;
-            }
-        """)
+        skills_frame.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
         skills_layout = QVBoxLayout(skills_frame)
-        skills_layout.setSpacing(10)
         
-        if skills_text and skills_text != 'Tidak ditemukan':
-            # Buat grid layout untuk skills
+        if skills_list:
             current_row = QHBoxLayout()
             current_row.setSpacing(10)
-            row_width = 0
-            max_width = 800  # Maksimum lebar yang diizinkan
+            skills_per_row = 3  # Jumlah skill per baris
+            skill_count = 0
             
-            for skill in skills_text.split('\n'):
+            for skill in skills_list:
                 if skill.strip():
                     skill_tag = QPushButton(skill.strip())
                     skill_tag.setFont(QFont("Segoe UI", 10))
                     skill_tag.setStyleSheet("""
-                        QPushButton {
-                            background-color: #E8F5E9;
-                            color: #2E7D32;
-                            border: 2px solid #C8E6C9;
-                            border-radius: 15px;
+                        QPushButton { 
+                            background-color: #E8F5E9; 
+                            color: #2E7D32; 
+                            border: 2px solid #C8E6C9; 
+                            border-radius: 15px; 
                             padding: 8px 15px;
-                            text-align: left;
-                        }
-                        QPushButton:hover {
-                            background-color: #C8E6C9;
                         }
                     """)
-                    
-                    # Hitung lebar minimum yang dibutuhkan
-                    skill_tag.setMinimumWidth(100)
-                    skill_tag.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-                    
-                    # Tambahkan ke row saat ini
+                    skill_tag.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
                     current_row.addWidget(skill_tag)
-                    row_width += skill_tag.sizeHint().width()
+                    skill_count += 1
                     
-                    # Jika row sudah penuh, tambahkan ke layout utama dan buat row baru
-                    if row_width >= max_width:
+                    # Jika sudah mencapai jumlah skill per baris, buat baris baru
+                    if skill_count % skills_per_row == 0:
                         skills_layout.addLayout(current_row)
                         current_row = QHBoxLayout()
                         current_row.setSpacing(10)
-                        row_width = 0
             
-            # Tambahkan row terakhir jika masih ada isinya
-            if current_row.count() > 0:
+            # Tambahkan baris terakhir jika masih ada skill yang belum ditampilkan
+            if skill_count % skills_per_row != 0:
+                current_row.addStretch()
                 skills_layout.addLayout(current_row)
-                
-            # Tambahkan stretch di akhir untuk memastikan alignment yang benar
+            
             skills_layout.addStretch()
         else:
-            no_skills = QLabel("Tidak ada data keahlian.")
-            no_skills.setFont(QFont("Segoe UI", 11))
-            no_skills.setStyleSheet("color: #757575;")
-            skills_layout.addWidget(no_skills)
-        
+            skills_layout.addWidget(QLabel("Tidak ada data keahlian."))
         self.info_layout.addWidget(skills_frame)
 
         # --- 5. Tampilkan Pengalaman Kerja (Job History) ---
