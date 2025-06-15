@@ -124,31 +124,59 @@ def parse_experience(text: str) -> list:
     return experiences
 
 def parse_education(text: str) -> list:
-    # Fungsi ini tetap sama seperti sebelumnya
+    """
+    Mem-parsing blok pendidikan dengan pendekatan baru yang lebih fleksibel.
+    Mengasumsikan setiap baris adalah entri dan mencoba memisahkannya secara cerdas.
+    """
     if not text:
         return []
-    entry_pattern = re.compile(r'^\s*(Bachelor|Master|Doctor|Associate|High School Diploma|(?:\b(19|20)\d{2}\b))', re.IGNORECASE | re.MULTILINE)
-    entry_starts = list(entry_pattern.finditer(text))
+
     parsed_entries = []
-    for i, start_match in enumerate(entry_starts):
-        start_pos = start_match.start()
-        end_pos = entry_starts[i + 1].start() if i + 1 < len(entry_starts) else len(text)
-        entry_block = text[start_pos:end_pos].strip()
+    # Asumsikan setiap baris dalam blok education adalah entri terpisah
+    lines = text.strip().split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
         year, degree, institution = 'N/A', 'N/A', 'N/A'
-        year_match = re.search(r'\b(19|20)\d{2}\b', entry_block)
+
+        # Mencoba mencari tahun (opsional)
+        year_match = re.search(r'\b((19|20)\d{2})\b', line)
         if year_match:
             year = year_match.group(0)
-            entry_block = entry_block.replace(year, "").strip()
-        lines = [line.strip() for line in entry_block.split('\n') if line.strip()]
-        if lines:
-            if ":" in lines[0]:
-                parts = lines[0].split(":", 1)
-                degree, institution = parts[0].strip(), parts[1].strip()
+            line = line.replace(year, '').strip()
+
+        # Mencoba memisahkan institusi dari gelar berdasarkan kata kunci gelar
+        degree_keywords = ['Certificate', 'Diploma', 'Bachelor', 'Master', 'Technician', 'Job-Related Training']
+        found_degree = False
+        for keyword in degree_keywords:
+            match = re.search(rf'\b({keyword}.*)\b', line, re.IGNORECASE)
+            if match:
+                degree = match.group(1).strip()
+                # Teks sebelum kata kunci dianggap sebagai institusi
+                institution = line[:match.start()].strip(' ,')
+                found_degree = True
+                break
+        
+        # Jika tidak ada kata kunci yang cocok, gunakan fallback
+        if not found_degree:
+            # Asumsikan bagian setelah "City , State" adalah gelar
+            parts = re.split(r'City\s*,\s*State', line, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                institution = parts[0].strip() + " City, State"
+                degree = parts[1].strip()
             else:
-                degree, institution = lines[0], ' '.join(lines[1:])
-        parsed_entry = {'year': year, 'degree': degree.replace(":", "").strip(), 'institution': institution.strip()}
-        if parsed_entry not in parsed_entries:
+                institution = line # Jika gagal total, anggap semua sebagai institusi
+
+        # Buat dictionary untuk entri yang sudah diparsing
+        parsed_entry = {'year': year, 'degree': degree, 'institution': institution}
+
+        # Hanya tambahkan jika entri valid dan belum ada
+        if (parsed_entry['degree'] != 'N/A' or parsed_entry['institution'] != 'N/A') and parsed_entry not in parsed_entries:
             parsed_entries.append(parsed_entry)
+
     return parsed_entries
 
 def extract_all_sections(text: str) -> dict:
